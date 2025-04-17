@@ -1,0 +1,10 @@
+$ ./src/git_subtree_report.sh 
+Color output enabled
+Initializing working context: .
+Work tree detected
+Resolved repo root: /var/home/cameron/dev/git-subtree-report
+WARNING: Repository contains zero commits
+
+real	0m0.027s
+user	0m0.012s
+sys	0m0.018s

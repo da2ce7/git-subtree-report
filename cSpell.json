@@ -1,0 +1,21 @@
+{
+    "words": [
+        "Ceuo",
+        "concatenatable",
+        "𝚏𝚒𝚕𝚎",
+        "Garnham",
+        "gitmodules",
+        "gsub",
+        "nonprint",
+        "numfmt",
+        "objectname",
+        "objectsize",
+        "objecttype",
+        "sprintf",
+        "toplevel",
+        "worktree"
+    ],
+    "enableFiletypes": [
+        "shellscript"
+    ]
+}

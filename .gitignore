@@ -1,0 +1,42 @@
+# .gitignore for a basic repository
+
+
+# Ignore OS-generated files
+.DS_Store
+Thumbs.db
+
+# Ignore build artifacts and compiled files
+/build*/
+dist/
+out/
+*.class
+*.o
+
+# Ignore dependency directories
+node_modules/
+vendor/
+.venv/
+env/
+
+# Ignore log files
+*.log
+logs/
+*.log.*
+
+# Ignore editor-specific files and directories
+.vscode/
+.idea/
+*.sublime-project
+
+# Ignore sensitive information and configuration files
+.env
+config.json
+secrets.yaml
+
+# Ignore temporary files and directories
+tmp/
+temp/
+*~
+*.swp
+*report.txt*
+*report.diff*

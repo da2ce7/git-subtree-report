@@ -1,6 +1,6 @@
 project(
     'git-subtree-report',
-    version: '1.0.1',
+    version: '1.0.2',
     license: 'AGPL-3.0',
     meson_version: '>=0.56.0',
     default_options: [
@@ -47,6 +47,14 @@ install_data(
     install_dir: doc_install_dir
 )
 
+man_page = files('man/man1/git-subtree-report.1')
+
+# Install man page
+install_man(
+  man_page,
+  install_dir: get_option('mandir') / 'man1'
+)
+
 # Conditionally install examples directory
 examples_exist = run_command(
     'test', '-d', 'examples',
@@ -67,6 +75,7 @@ meson.add_dist_script(
     '-c',
     '''
     cd "@0@"
+    install -Dm644 man/man1/git-subtree-report.1 -t "$MESON_DIST_ROOT/man/man1"
     install -Dm644 LICENSE.md README.md -t "$MESON_DIST_ROOT"
     cp -rp src examples "$MESON_DIST_ROOT"
     '''.format(meson.current_source_dir())

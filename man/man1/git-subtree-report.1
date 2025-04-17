@@ -1,0 +1,107 @@
+.\" Manpage for git-subtree-report
+.\" SPDX-License-Identifier: AGPL-3.0
+.Dd April 17, 2025
+.Dt GIT-SUBTREE-REPORT 1
+.Os
+.Sh NAME
+.Nm git-subtree-report
+.Nd Analyze Git repositories/subtrees for safe file concatenation
+.Sh SYNOPSIS
+.Nm
+.Op Fl o
+.Op Fl e Ar pattern
+.Op Fl r Ar ref
+.Op Fl C Ar dir
+.Op Fl t Ar path
+.Op Fl s Ar size
+.Sh DESCRIPTION
+The
+.Nm
+utility performs deep analysis of Git repository subtrees to determine file safety for concatenation outputs. Key features include:
+.Bl -bullet -offset indent
+.It
+Full tree visualization with exclusion patterns
+.It
+Multi-level safety checks (binary detection, encoding validation)
+.It
+Integration with Git LFS and submodules
+.It
+Historical analysis at any commit reference
+.El
+.Sh OPTIONS
+.Bl -tag -width Ds
+.It Fl C Ar dir
+Change working directory before analysis (supports bare repos)
+.It Fl e Ar pattern
+Exclude paths matching Perl-compatible regular expression
+.It Fl o
+Enable concatenation output mode (generates combined safe files)
+.It Fl r Ar ref
+Analyze repository state at specified commit/branch/tag
+.It Fl s Ar size
+Set maximum filesize for detailed analysis (e.g., 5M, 100K)
+.It Fl t Ar path
+Subdirectory path to analyze (relative to repo root)
+.It Fl -help
+Show full help message with examples
+.El
+.Sh ENVIRONMENT
+.Bl -tag -width Ds
+.It Ev LC_ALL
+Overrides locale settings (requires C.UTF-8)
+.It Ev NO_COLOR
+Disables colored output when set
+.El
+.Sh FILES
+.Bl -tag -width Ds
+.It Pa /usr/local/bin/git-subtree-report
+Typical installation path
+.It Pa ~/.config/git-subtree-report/cSpell.json
+Custom spelling dictionary (optional)
+.It Pa examples/initial_commit.txt
+Sample report output
+.El
+.Sh EXAMPLES
+Analyze src/ directory in CI environment:
+.Dl $ git-subtree-report -C /build/repo -t src/ -e '\.csv$' -s 2M
+.Pp
+Generate concatenated output for documentation audit:
+.Dl $ git-subtree-report -t docs/ -o | less -R
+.Pp
+Analyze project state from 3 months ago:
+.Dl $ git-subtree-report -r $(git rev-list -n1 --until="3 months ago")
+.Sh SEE ALSO
+.Xr git 1 ,
+.Xr perl 1 ,
+.Xr numfmt 1
+.Sh AUTHORS
+.An Cameron Garnham Aq Mt me@da2ce7.com
+.Sh CAVEATS
+Special considerations for repository types:
+.Bl -bullet
+.It
+For bare repositories:
+.Bl -bullet
+.It
+Must be invoked from repository root directory, OR
+.It
+Use
+.Fl C Ar /path/to/bare/repo.git
+to specify full path to repository root
+.El
+.It
+When combining
+.Fl C
+and
+.Fl t :
+.Bl -bullet
+.It
+.Fl C
+must always point to repository root (never subdirectories)
+.It
+.Fl t Ar path
+resolves relative to repository root (not working directory)
+.El
+.It
+All operations prevent upward path traversal (e.g., ../)
+.El

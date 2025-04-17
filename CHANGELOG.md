@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [1.0.2] - 2025-04-17
+
+### Added
+
+-   **Documentation:** A comprehensive `man(1)` page for `git-subtree-report`, providing integrated, offline help in the command-line environment.
+
+### Changed
+
+-   **Build System:** The `meson.build` file was updated to handle the installation and packaging of the new man page.
+
+
 ## [1.0.1] - 2025-04-17
 
 ### Added

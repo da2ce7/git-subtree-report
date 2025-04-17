@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2025-04-17
+
+### Added
+
+-   **Meson Build System:**
+    -   Introduced `meson.build` for standardized installation and packaging.
+    -   Added programmatic dependency checks for `bash`, `git`, `perl`, and `numfmt` to ensure a stable environment.
+    -   Handles installation of the main script and documentation to standard system paths (`bindir`, `datadir`).
+-   **Example Outputs:**
+    -   Added `repo_commit.txt` and `repo_commit.log` as concrete examples of the tool's output.
+
+### Changed
+
+-   **README.md:** Updated with new installation instructions for Meson and a reproducible example section.
+-   **.gitignore:** Updated to ignore Meson build artifacts while explicitly including the new example log file.
+-   **Project Version:** Bumped version to `1.0.1` in all relevant files.
+
+
 ## [1.0.0] - 2025-04-17
 
 ### Added
@@ -23,4 +41,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     -   Basic repository layout (`src/`, `examples/`).
     -   `.gitignore` for common OS, editor, and dependency files.
     -   `cSpell.json` for project-specific spelling dictionary.
-    

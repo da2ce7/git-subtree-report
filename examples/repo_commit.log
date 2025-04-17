@@ -1,0 +1,36 @@
+Initializing working context: .
+Work tree detected
+Resolved repo root: /var/home/cameron/dev/git-subtree-report
+Resolving commit: HEAD
+Resolved commit: fa9e08ec
+Initialized workspace:
+  ├─ Repo root:  /var/home/cameron/dev/git-subtree-report
+  ├─ Working dir: /var/home/cameron/dev/git-subtree-report
+  ├─ Subtree:    ./.
+  └─ Exclusion:  <none>
+Processing entire repository tree
+Collecting file metadata... found 7 files
+Calculating blob sizes...
+Applying exclusion pattern...
+Human formatting blob sizes...
+done
+  ◼ Included files: 7
+  ◼ Excluded files: 0
+  ◼ Total modes captured: 7
+  ◼ Total unique blobs: 7
+Processing 7 files:
+Detecting submodules... done (0 found)
+Detecting symlinks... done (0 found)
+Scanning Git attributes... completed
+Processed 7 file blobs:
+  ◼ Safe text files:       7
+  ◼ Contained null bytes:  0
+  ◼ Contained invalid UTF8:  0
+  ◼ Non-printable/binary:  0
+add_file_analysis completed in 0.034 seconds
+
+real	0m0.178s
+user	0m0.070s
+sys	0m0.131s
+Processed 7 files
+Completed in 0 seconds

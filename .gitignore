@@ -12,6 +12,14 @@ out/
 *.class
 *.o
 
+# Meson temp files
+compile_commands.json
+*.meson
+/meson-private/
+/meson-info/
+/warp/
+/.cache/
+
 # Ignore dependency directories
 node_modules/
 vendor/
@@ -22,6 +30,7 @@ env/
 *.log
 logs/
 *.log.*
+!examples/repo_commit.log
 
 # Ignore editor-specific files and directories
 .vscode/

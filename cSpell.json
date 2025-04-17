@@ -1,18 +1,24 @@
 {
     "words": [
+        "bindir",
         "Ceuo",
         "concatenatable",
+        "endforeach",
         "𝚏𝚒𝚕𝚎",
         "Garnham",
         "gitmodules",
         "gsub",
+        "gztar",
         "nonprint",
         "numfmt",
         "objectname",
         "objectsize",
         "objecttype",
+        "returncode",
+        "rwxr",
         "sprintf",
         "toplevel",
+        "venv",
         "worktree"
     ],
     "enableFiletypes": [

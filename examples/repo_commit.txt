@@ -1,0 +1,60 @@
+================================================================================
+  GIT SUBTREE CONCATENATION REPORT
+================================================================================
+ ▸ Repository Root: /var/home/cameron/dev/git-subtree-report
+ ▸ Target Subtree:  .
+ ▸ Commit Hash:     fa9e08ec
+ ▸ Exclusion Filter:<none>
+ ▸ Max File Size:   1.0M
+--------------------------------------------------------------------------------
+
+ * COMMIT FILE TREE STRUCTURE
+--------------------------------------------------------------------------------
+040000 . (selected subtree)
+------ ├── examples/
+100644 │   └── zero_commits.txt
+------ ├── src/
+100755 │   └── git_subtree_report.sh
+100644 ├── .gitignore
+100644 ├── CHANGELOG.md
+100644 ├── cSpell.json
+100644 ├── LICENSE.md
+100644 └── README.md
+--------------------------------------------------------------------------------
+
+================================================================================
+  GIT SUBTREE ANALYSIS REPORT
+================================================================================
+| Repository Root     : /var/home/cameron/dev/git-subtree-report
+| Analyzed Path       : .
+| Git Commit          : fa9e08ec
+--------------------------------------------------------------------------------
+| Exclusion Filter    : <none>
+| Processed Files     : 7
+
+ * FILE COMPOSITION
+--------------------------------------------------------------------------------
+  Concatenatable:                7
+  » Concatenatable:
+    - [  527.0 (527 bytes)  ] .gitignore
+    - [   1.3K (1286 bytes) ] CHANGELOG.md
+    - [  33.5K (34260 bytes)] LICENSE.md
+    - [   4.4K (4469 bytes) ] README.md
+    - [  368.0 (368 bytes)  ] cSpell.json
+    - [  248.0 (248 bytes)  ] examples/zero_commits.txt
+    - [  44.6K (45637 bytes)] src/git_subtree_report.sh
+  Submodules:                    0
+  Symlinks:                      0
+  LFS pointers:                  0
+  Binary files:                  0
+  Oversized files:               0
+  Null byte files:               0
+  Invalid UTF8 files:            0
+  Non-printable files:           0
+
+ * SIZE ANALYSIS
+--------------------------------------------------------------------------------
+  Total repository size:           84.8K (86795 bytes)
+  LFS storage size:              [size unavailable]
+  Size threshold:                   1.0M (1048576 bytes)
+

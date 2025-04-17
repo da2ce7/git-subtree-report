@@ -1,4 +1,4 @@
-# 🔍 Git Subtree Analyzer & Reporter [![Version 1.0.0](https://img.shields.io/badge/version-1.0.0-blue)](LICENSE.md) [![AGPLv3 License](https://img.shields.io/badge/license-AGPLv3-green)](LICENSE.md)
+# 🔍 Git Subtree Analyzer & Reporter [![Version 1.0.1](https://img.shields.io/badge/version-1.0.1-blue)](LICENSE.md) [![AGPLv3 License](https://img.shields.io/badge/license-AGPLv3-green)](LICENSE.md)
 
 **Zero-Footprint Git Repository Analysis Tool**
 *See into your repository's soul without checking out files!*
@@ -41,9 +41,28 @@ cd git-subtree-report/src
 chmod +x git_subtree_report.sh
 ```
 
+### Meson Build System
+```bash
+# Install Meson build system if needed
+python3 -m pip install meson ninja
+
+# Configure and install
+meson setup build
+meson compile -C build
+meson install -C build
+
+# Custom install location
+meson setup build --prefix ~/.local
+meson install -C build
+```
+
 ### System-Wide Install (Optional)
 ```bash
+# Manual installation
 sudo cp git_subtree_report.sh /usr/local/bin/git-subtree-report
+
+# Create distribution package
+meson dist -C build --formats gztar
 ```
 
 ## 💡 Usage
@@ -55,7 +74,7 @@ sudo cp git_subtree_report.sh /usr/local/bin/git-subtree-report
 | `-r`   | Git reference (commit/branch/tag)            | `-r develop`        |
 | `-C`   | Working directory                            | `-C /path/to/repo`  |
 | `-o`   | Output concatenated safe files               | `-o`                |
-| `-t`   | Subtree path to analyze                   | `-t docs/`          |
+| `-t`   | Subtree path to analyze                      | `-t docs/`          |
 | `-s`   | Max file size for analysis                   | `-s 10M`            |
 
 ### Basic Example
@@ -76,7 +95,11 @@ git-subtree-report -C "${BUILD_DIR}" \
 ## 📊 Report Examples
 
 ### Standard Report
-[Sample Report](https://github.com/da2ce7/git-subtree-report/examples/zero_commits.txt)
+```bash
+$ git-subtree-report 1> examples/repo_commit.txt 2> examples/repo_commit.log
+```
+[Repo Commit Report](https://github.com/da2ce7/git-subtree-report/examples/repo_commit.txt)
+[Repo Commit Log](https://github.com/da2ce7/git-subtree-report/examples/repo_commit.log)
 
 ### Concatenation Mode
 ```bash

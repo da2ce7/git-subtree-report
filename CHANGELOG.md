@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-04-17
+
+### Changed
+
+-   **Core Analysis Engine:** Refactored the internal data model from being path-centric to blob-centric. This significantly improves performance on repositories with duplicate files by ensuring that each unique file content (blob) is analyzed only once.
+-   **Internal State Management:** Variable names have been updated to clearly distinguish between path-based properties (e.g., `path_is_symlink`) and content-based properties (e.g., `blob_is_safe`), improving code clarity and maintainability.
+
 
 ## [1.0.2] - 2025-04-17
 

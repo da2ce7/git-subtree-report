@@ -2,35 +2,36 @@ Initializing working context: .
 Work tree detected
 Resolved repo root: /var/home/cameron/dev/git-subtree-report
 Resolving commit: HEAD
-Resolved commit: b8661e50
+Resolved commit: 9fceb75f
 Initialized workspace:
   ├─ Repo root:  /var/home/cameron/dev/git-subtree-report
   ├─ Working dir: /var/home/cameron/dev/git-subtree-report
   ├─ Subtree:    ./.
   └─ Exclusion:  <none>
 Processing entire repository tree
-Collecting file metadata... found 10 files
+Collecting file metadata... found 11 files
 Calculating blob sizes...
 Applying exclusion pattern...
 Human formatting blob sizes...
 done
-  ◼ Included files: 10
+  ◼ Included files: 11
   ◼ Excluded files: 0
-  ◼ Total modes captured: 10
-  ◼ Total unique blobs: 10
-Processing 10 files:
+  ◼ Total modes captured: 11
+  ◼ Total unique blobs: 11
+Processing 11 files:
 Detecting submodules... done (0 found)
 Detecting symlinks... done (0 found)
 Scanning Git attributes... completed
-Processed 10 file blobs:
-  ◼ Safe text files:       10
+Analyzing content safety... done
+Processed 11 file blobs:
   ◼ Contained null bytes:  0
   ◼ Contained invalid UTF8:  0
   ◼ Non-printable/binary:  0
-add_file_analysis completed in 0.038 seconds
+  ◼ Safe text blobs: 11 blobs
+add_file_analysis completed in 0.040 seconds
 
-real	0m0.195s
-user	0m0.072s
-sys	0m0.148s
-Processed 10 files
-Completed in 1 seconds
+real	0m0.201s
+user	0m0.062s
+sys	0m0.162s
+Processed 11 files
+Completed in 0 seconds

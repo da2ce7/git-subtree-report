@@ -1,4 +1,4 @@
-# 🔍 Git Subtree Analyzer & Reporter [![Version 1.1.0](https://img.shields.io/badge/version-1.1.0-blue)](LICENSE.md) [![AGPLv3 License](https://img.shields.io/badge/license-AGPLv3-green)](LICENSE.md)
+# 🔍 Git Subtree Analyzer & Reporter [![Version 1.1.1](https://img.shields.io/badge/version-1.1.1-blue)](LICENSE.md) [![AGPLv3 License](https://img.shields.io/badge/license-AGPLv3-green)](LICENSE.md)
 
 **Zero-Footprint Git Repository Analysis Tool**
 *See into your repository's soul without checking out files!*
@@ -33,35 +33,41 @@
 ✔️ Clean error handling
 
 ## 🛠️ Installation
+**Windows Note:** Requires Git Bash/WSL2 for full functionality
 
 ### Basic Installation
 ```bash
 git clone https://github.com/da2ce7/git-subtree-report.git
-cd git-subtree-report/src
-chmod +x git_subtree_report.sh
+cd git-subtree-report
+
+# Local Installation (ensure that `~/.local/bin` is in your $PATH)
+install -Dm755 src/git_subtree_report.sh ~/.local/bin/git-subtree-report
+
+# System Installation
+sudo install -m 0755 src/git_subtree_report.sh /usr/local/bin/git-subtree-report
 ```
 
-### Meson Build System
+### Meson Build System (preferred)
 ```bash
-# Install Meson build system if needed
-python3 -m pip install meson ninja
+# Install Meson (Ubuntu)
+sudo apt install meson
 
-# Configure and install
+# Install Meson (Fedora)
+sudo dnf install meson
+
+# Local Configure (ensure that `~/.local/bin` is in your $PATH)
+meson setup build --prefix ~/.local
+
+# System Configure
 meson setup build
+
+# Build
 meson compile -C build
 meson install -C build
-
-# Custom install location
-meson setup build --prefix ~/.local
-meson install -C build
 ```
 
-### System-Wide Install (Optional)
+### Create distribution package
 ```bash
-# Manual installation
-sudo cp git_subtree_report.sh /usr/local/bin/git-subtree-report
-
-# Create distribution package
 meson dist -C build --formats gztar
 ```
 

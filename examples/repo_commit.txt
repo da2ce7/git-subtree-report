@@ -3,7 +3,7 @@
 ================================================================================
  ▸ Repository Root: /var/home/cameron/dev/git-subtree-report
  ▸ Target Subtree:  .
- ▸ Commit Hash:     9fceb75f
+ ▸ Commit Hash:     a6683c6d
  ▸ Exclusion Filter:<none>
  ▸ Max File Size:   1.0M
 --------------------------------------------------------------------------------
@@ -33,7 +33,7 @@
 ================================================================================
 | Repository Root     : /var/home/cameron/dev/git-subtree-report
 | Analyzed Path       : .
-| Git Commit          : 9fceb75f
+| Git Commit          : a6683c6d
 --------------------------------------------------------------------------------
 | Exclusion Filter    : <none>
 | Processed Files     : 11
@@ -43,16 +43,16 @@
   Concatenatable:                11
   » Concatenatable:
     - [  648.0 (648 bytes)  ] .gitignore
-    - [   2.4K (2407 bytes) ] CHANGELOG.md
+    - [   3.1K (3165 bytes) ] CHANGELOG.md
     - [  33.5K (34260 bytes)] LICENSE.md
-    - [   5.0K (5028 bytes) ] README.md
+    - [   5.2K (5236 bytes) ] README.md
     - [  479.0 (479 bytes)  ] cSpell.json
-    - [   1.1K (1055 bytes) ] examples/repo_commit.log
-    - [   2.7K (2686 bytes) ] examples/repo_commit.txt
+    - [   1.1K (1088 bytes) ] examples/repo_commit.log
+    - [   2.8K (2846 bytes) ] examples/repo_commit.txt
     - [  248.0 (248 bytes)  ] examples/zero_commits.txt
     - [   2.6K (2615 bytes) ] man/man1/git-subtree-report.1
     - [   2.1K (2130 bytes) ] meson.build
-    - [  44.6K (45637 bytes)] src/git_subtree_report.sh
+    - [  47.7K (48753 bytes)] src/git_subtree_report.sh
   Submodules:                    0
   Symlinks:                      0
   LFS pointers:                  0
@@ -64,7 +64,7 @@
 
  * SIZE ANALYSIS
 --------------------------------------------------------------------------------
-  Total repository size:           95.0K (97193 bytes)
+  Total repository size:           99.1K (101468 bytes)
   LFS storage size:              [size unavailable]
   Size threshold:                   1.0M (1048576 bytes)
 

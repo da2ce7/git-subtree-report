@@ -5,7 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.0] - 2025-04-17
+## [1.1.1] - 2025-04-18
+
+### Changed
+
+-   Greatly improved the installation instructions in `README.md` by using the standard `install` command, providing platform-specific guidance, and clarifying the Meson workflow.
+
+
+## [1.1.0] - 2025-04-18
 
 ### Changed
 

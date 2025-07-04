@@ -2,7 +2,7 @@
 
 # git_subtree_report.sh - Analyze Git repositories and subtrees without filesystem interaction
 #
-# Version: 1.1.1
+# Version: 1.2.0
 # License: AGPLv3
 # Author: Cameron Garnham <me@da2ce7.com>
 # Repository: https://github.com/da2ce7/git-subtree-report
@@ -506,7 +506,7 @@ collect_path_is_included() {
 			path_is_included["$rel_path"]=1
 		done
 	fi
-	readonly -A path_is_included path_is_excluded # Fully populated
+	readonly -A path_is_excluded # Fully populated
 
 	echo "Human formatting blob sizes..." >&2
 	for blob_hash in "${!blob_to_size[@]}"; do
@@ -1052,7 +1052,7 @@ format_size() {
 	# Dynamic byte scaling (B→TiB)
 	local bytes="${1:-0}"
 	((bytes == 0)) && {
-		echo "[size unavailable]"
+		echo "0.0B (0 bytes)"
 		return
 	}
 	printf "%s (%s bytes)" \
@@ -1101,8 +1101,12 @@ collect_report_data() {
 		fi
 	done
 
+	# Added file_counts_total_pre_exclusion to hold the true total.
+	local -i total_pre_exclusion=$((${#path_is_included[@]} + ${#path_is_excluded[@]}))
+
 	declare -gA report_data=(
-		[file_counts_total]=${#path_is_included[@]}
+		[file_counts_included]=${#path_is_included[@]}
+		[file_counts_total_pre_exclusion]=$total_pre_exclusion
 		[file_counts_concatenatable]=$concatenatable_count
 		[file_counts_submodules]=${#path_is_submodule[@]}
 		[file_counts_symlinks]=${#path_is_symlink[@]}
@@ -1115,7 +1119,7 @@ collect_report_data() {
 		[repo_total_size]=$total_size
 		[repo_lfs_size]=$(
 			IFS=+
-			echo "$((${path_to_lfs_size[*]}))"
+			echo "$((${path_to_lfs_size[*]:-0}))" # Added default to prevent errors on empty array
 		)
 		[max_file_size]="$max_file_size_arg"
 		[excluded_count]="${#path_is_excluded[@]}"
@@ -1127,14 +1131,14 @@ validate_report_data() {
 	# Metric consistency guards
 	local -i error_count=0
 
-	if [[ ! -v report_data[file_counts_total] ]]; then
-		echo "ERROR: Critical field missing - total file count not tracked" >&2
+	if [[ ! -v report_data[file_counts_included] ]]; then
+		echo "ERROR: Critical field missing - included file count not tracked" >&2
 		((error_count++))
 	else
-		if ! [[ "${report_data[file_counts_total]}" =~ ^[0-9]+$ ]]; then
+		if ! [[ "${report_data[file_counts_included]}" =~ ^[0-9]+$ ]]; then
 			echo "ERROR: Invalid file count type (non-integer detected)" >&2
 			((error_count++))
-		elif ((report_data[file_counts_total] < 0)); then
+		elif ((report_data[file_counts_included] < 0)); then
 			echo "ERROR: Invalid file count (negative value)" >&2
 			((error_count++))
 		fi
@@ -1158,7 +1162,7 @@ add_summary_section() {
 	buffer_append "$(printf "%s %-20s: %s" "${BOX_CHARS[vertical]}" "Git Commit" "${ref_hash:0:8}")"
 	add_divider "${BOX_CHARS[line_single]}" 80 "detail"
 	buffer_append "$(printf "%s %-20s: %s" "${BOX_CHARS[vertical]}" "Exclusion Filter" "${exclude_pattern_arg:-<none>}")"
-	buffer_append "$(printf "%s %-20s: %s" "${BOX_CHARS[vertical]}" "Processed Files" "${report_data[file_counts_total]}")"
+	buffer_append "$(printf "%s %-20s: %s" "${BOX_CHARS[vertical]}" "Processed Files" "${report_data[file_counts_included]}")"
 }
 
 add_file_analysis() {
@@ -1182,7 +1186,7 @@ add_file_analysis() {
 	local category array_name label count color
 	for category in "${notice_categories[@]}"; do
 		IFS=':' read -r array_name label count color <<<"$category"
-		add_stat_row "${label}:" "${count}" "${color}"
+		add_stat_row "${label}:" "$(format_count "$count" "${report_data[file_counts_included]}")" "${color}"
 		if [[ "$count" -gt 0 ]]; then
 			buffer_append "$(apply_color "  » ${label}:" "${COLORS[detail]}")"
 			case "$array_name" in
@@ -1203,7 +1207,7 @@ add_file_analysis() {
 add_size_analysis() {
 	# Storage visualizer
 	add_section "SIZE ANALYSIS"
-	add_stat_row "Total repository size:" "$(format_size "${report_data[repo_total_size]}")" "neutral"
+	add_stat_row "Total size (included files):" "$(format_size "${report_data[repo_total_size]}")" "neutral"
 	add_stat_row "LFS storage size:" "$(format_size "${report_data[repo_lfs_size]}")" "neutral"
 	add_stat_row "Size threshold:" "$(format_size "${report_data[max_file_size]}")" "neutral"
 }
@@ -1212,10 +1216,36 @@ add_exclusion_details() {
 	# Filter coverage analysis
 	((report_data[excluded_count] == 0)) && return
 	add_section "EXCLUSION DETAILS"
-	add_stat_row "Excluded files:" "${report_data[excluded_count]}" "neutral"
+
+	local -r total_pre_exclusion="${report_data[file_counts_total_pre_exclusion]}"
+
+	# Reports included file count against the pre-exclusion total
 	add_stat_row "Included files:" \
-		"$(format_count "${report_data[file_counts_concatenatable]}" \
-			$((report_data[file_counts_concatenatable] + report_data[excluded_count])))" "neutral"
+		"$(format_count "${report_data[file_counts_included]}" "$total_pre_exclusion")" "neutral"
+
+	# Reports excluded file count against the pre-exclusion total
+	add_stat_row "Excluded files:" \
+		"$(format_count "${report_data[excluded_count]}" "$total_pre_exclusion")" "warn"
+
+	# Adds a list of the excluded files for full transparency.
+	if [[ "${report_data[excluded_count]}" -gt 0 ]]; then
+		buffer_append "$(apply_color "  » Excluded Paths (matching '${exclude_pattern_arg}'):" "${COLORS[detail]}")"
+		local max_size_len=0
+		while IFS= read -r rel_path; do
+			local blob_hash="${path_to_blob[$rel_path]}"
+			local formatted_size="${blob_to_size_pretty[$blob_hash]}"
+			local len=${#formatted_size}
+			((len > max_size_len)) && max_size_len=$len
+		done < <(printf '%s\n' "${!path_is_excluded[@]}" | sort)
+
+		while IFS= read -r rel_path; do
+			local blob_hash="${path_to_blob[$rel_path]}"
+			local formatted_size="${blob_to_size_pretty[$blob_hash]}"
+			local padded_size
+			padded_size=$(printf "%-*s" "$max_size_len" "$formatted_size")
+			buffer_append "    - [${padded_size}] ${rel_path}"
+		done < <(printf '%s\n' "${!path_is_excluded[@]}" | sort)
+	fi
 }
 
 # Dynamic Layout Manager
@@ -1241,7 +1271,7 @@ add_symlink_details() {
 			exit 1
 		fi
 		blob_hash="${path_to_blob[$rel_path]}"
-		dest="${blob_to_symlink[$blob_hash]}"
+		dest="${blob_to_symlink[$blob_hash]:-<target not found>}"
 		buffer_append "    - ${rel_path} $(apply_color "[→ ${dest}]" "${COLORS[detail]}")"
 	done < <(printf '%s\n' "${files[@]}" | sort)
 }
@@ -1291,7 +1321,7 @@ add_simple_size_details() {
 		blob_hash="${path_to_blob[$rel_path]}"
 		formatted_size="${blob_to_size_pretty[$blob_hash]}"
 		padded_size=$(printf "%-*s" "$max_size_len" "$formatted_size")
-		prefix="[$padded_size]"
+		prefix="[${padded_size}]"
 		additional=$(build_additional "$array_name" "$rel_path")
 		buffer_append "    - ${prefix} ${rel_path}${additional:+ $additional}"
 	done < <(printf '%s\n' "${!target_files[@]}" | sort)
@@ -1353,9 +1383,9 @@ add_prefix_details() {
 		blob_hash="${path_to_blob[$rel_path]}"
 		local count
 		if [[ "$array_name" == "null_byte" ]]; then
-			count=${blob_to_null_count[$blob_hash]}
+			count=${blob_to_null_count[$blob_hash]:-0}
 		else
-			count=${blob_to_nonprint_count[$blob_hash]}
+			count=${blob_to_nonprint_count[$blob_hash]:-0}
 		fi
 		((count > max_count)) && max_count=$count
 	done
@@ -1370,9 +1400,9 @@ add_prefix_details() {
 
 		local count
 		if [[ "$array_name" == "null_byte" ]]; then
-			count=${blob_to_null_count[$blob_hash]}
+			count=${blob_to_null_count[$blob_hash]:-0}
 		else
-			count=${blob_to_nonprint_count[$blob_hash]}
+			count=${blob_to_nonprint_count[$blob_hash]:-0}
 		fi
 		inner_additional=$(printf "%s ×%${count_width}d" "$label" "$count")
 		len_inner_additional=${#inner_additional}
@@ -1388,9 +1418,9 @@ add_prefix_details() {
 
 		local count
 		if [[ "$array_name" == "null_byte" ]]; then
-			count=${blob_to_null_count[$blob_hash]}
+			count=${blob_to_null_count[$blob_hash]:-0}
 		else
-			count=${blob_to_nonprint_count[$blob_hash]}
+			count=${blob_to_nonprint_count[$blob_hash]:-0}
 		fi
 		inner_additional=$(printf "%s ×%${count_width}d" "$label" "$count")
 		padded_inner_additional=$(printf "%-*s" "$max_inner_additional_len" "$inner_additional")
@@ -1533,7 +1563,7 @@ trap 'echo "‼️  Unexpected pipe failure" >&2; exit 141' PIPE
 
 show_runtime_info() {
 	# Resource usage stats
-	echo "Processed ${#path_is_included[@]} files" >&2
+	echo "Processed ${report_data[file_counts_included]} of ${report_data[file_counts_total_pre_exclusion]} files" >&2
 	echo "Completed in ${SECONDS} seconds" >&2
 }
 

@@ -3,7 +3,7 @@
 ================================================================================
  ▸ Repository Root: /var/home/cameron/dev/git-subtree-report
  ▸ Target Subtree:  .
- ▸ Commit Hash:     a6683c6d
+ ▸ Commit Hash:     4864b0b9
  ▸ Exclusion Filter:<none>
  ▸ Max File Size:   1.0M
 --------------------------------------------------------------------------------
@@ -33,14 +33,14 @@
 ================================================================================
 | Repository Root     : /var/home/cameron/dev/git-subtree-report
 | Analyzed Path       : .
-| Git Commit          : a6683c6d
+| Git Commit          : 4864b0b9
 --------------------------------------------------------------------------------
 | Exclusion Filter    : <none>
 | Processed Files     : 11
 
  * FILE COMPOSITION
 --------------------------------------------------------------------------------
-  Concatenatable:                11
+  Concatenatable:                11 (100.0%)
   » Concatenatable:
     - [  648.0 (648 bytes)  ] .gitignore
     - [   3.1K (3165 bytes) ] CHANGELOG.md
@@ -53,18 +53,18 @@
     - [   2.6K (2615 bytes) ] man/man1/git-subtree-report.1
     - [   2.1K (2130 bytes) ] meson.build
     - [  47.7K (48753 bytes)] src/git_subtree_report.sh
-  Submodules:                    0
-  Symlinks:                      0
-  LFS pointers:                  0
-  Binary files:                  0
-  Oversized files:               0
-  Null byte files:               0
-  Invalid UTF8 files:            0
-  Non-printable files:           0
+  Submodules:                    0 (0.0%)
+  Symlinks:                      0 (0.0%)
+  LFS pointers:                  0 (0.0%)
+  Binary files:                  0 (0.0%)
+  Oversized files:               0 (0.0%)
+  Null byte files:               0 (0.0%)
+  Invalid UTF8 files:            0 (0.0%)
+  Non-printable files:           0 (0.0%)
 
  * SIZE ANALYSIS
 --------------------------------------------------------------------------------
-  Total repository size:           99.1K (101468 bytes)
-  LFS storage size:              [size unavailable]
+  Total size (included files):     99.1K (101468 bytes)
+  LFS storage size:              0.0B (0 bytes)
   Size threshold:                   1.0M (1048576 bytes)
 

@@ -2,7 +2,7 @@ Initializing working context: .
 Work tree detected
 Resolved repo root: /var/home/cameron/dev/git-subtree-report
 Resolving commit: HEAD
-Resolved commit: a6683c6d
+Resolved commit: 4864b0b9
 Initialized workspace:
   ├─ Repo root:  /var/home/cameron/dev/git-subtree-report
   ├─ Working dir: /var/home/cameron/dev/git-subtree-report
@@ -28,10 +28,10 @@ Processed 11 file blobs:
   ◼ Contained invalid UTF8:  0
   ◼ Non-printable/binary:  0
   ◼ Safe text blobs: 11 blobs
-add_file_analysis completed in 0.041 seconds
+add_file_analysis completed in 0.062 seconds
 
-real	0m0.204s
-user	0m0.081s
-sys	0m0.142s
-Processed 11 files
+real	0m0.215s
+user	0m0.074s
+sys	0m0.164s
+Processed 11 of 11 files
 Completed in 0 seconds

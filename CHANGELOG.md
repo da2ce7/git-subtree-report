@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [1.2.0] - 2025-07-04
+
+### Added
+
+-   **Exclusion Transparency:** The report now lists the full path and size of each file matched by an exclusion pattern, providing complete clarity on what was filtered.
+
+### Changed
+
+-   **Report Statistics:** File category counts are now presented with percentages, offering a clearer at-a-glance analysis of repository composition.
+-   **Report Clarity:** Improved output labels (e.g., "Total size (included files)") and more consistent formatting for zero-value sizes to remove ambiguity.
+
+
 ## [1.1.1] - 2025-04-18
 
 ### Changed

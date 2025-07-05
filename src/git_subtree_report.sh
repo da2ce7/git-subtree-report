@@ -2,7 +2,7 @@
 
 # git_subtree_report.sh - Analyze Git repositories and subtrees without filesystem interaction
 #
-# Version: 1.2.0
+# Version: 1.3.0
 # License: AGPLv3
 # Author: Cameron Garnham <me@da2ce7.com>
 # Repository: https://github.com/da2ce7/git-subtree-report
@@ -171,9 +171,38 @@ setup_environment() {
 	echo "  └─ Exclusion:  ${exclude_pattern_arg:-<none>}" >&2
 }
 
+### Security & Directory Handling
+# verify_no_symlinks_in_path - Security check to prevent TOCTOU vulnerabilities.
+# It traverses a path upwards from the target, ensuring no component is a symbolic link.
+# NOTE: This temporary version uses the script's original error style.
+verify_no_symlinks_in_path() {
+	local path_to_check="$1"
+	local original_path="$path_to_check"
+	# Canonicalize the path to be absolute for a reliable check.
+	[[ "$path_to_check" != /* ]] && path_to_check="$PWD/$path_to_check"
+
+	# This loop is a security measure. Instead of checking only the final path, it walks
+	# up the tree, ensuring no component of the path is a symlink. This prevents a
+	# malicious actor from swapping a directory with a symlink after a check but
+	# before the script `cd`s into it.
+	while [[ "$path_to_check" != "/" && "$path_to_check" != "." ]]; do
+		if [ -L "$path_to_check" ]; then
+			echo "ERROR: Security check failed: Symbolic link detected at '$path_to_check'." >&2
+			echo "Hint: The path provided via -C ('$original_path') contains a symlink, which is disallowed for security reasons." >&2
+			echo "Hint: Please use the canonical path. You can resolve it with: readlink -f '$original_path'" >&2
+			exit 135 # Use a specific exit code for this security failure.
+		fi
+		path_to_check=$(dirname "$path_to_check")
+	done
+}
+
 ### Directory Handling
 handle_directory_change() {
 	echo "Initializing working context: $context_arg" >&2
+
+	# Security Check: Verify the path has no symlinks before using it.
+	verify_no_symlinks_in_path "$context_arg"
+
 	if ! cd -- "$context_arg"; then
 		echo "ERROR: Failed to establish context (-C)" >&2
 		exit 129

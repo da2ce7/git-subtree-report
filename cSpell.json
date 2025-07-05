@@ -17,6 +17,7 @@
         "returncode",
         "rwxr",
         "sprintf",
+        "TOCTOU",
         "toplevel",
         "venv",
         "worktree"

@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.3.0] - 2025-07-05
+
+### Security
+
+-   Hardened the script against potential Time-of-Check, Time-of-Use (TOCTOU) race conditions by adding a new security check. The script now verifies that no component of the path provided via the `-C` argument is a symbolic link before changing directories. This prevents the possibility of directory paths being maliciously swapped during script execution.
+
+
 ## [1.2.0] - 2025-07-04
 
 ### Added

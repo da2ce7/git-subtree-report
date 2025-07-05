@@ -2,7 +2,7 @@
 
 # git_subtree_report.sh - Analyze Git repositories and subtrees without filesystem interaction
 #
-# Version: 1.3.0
+# Version: 1.4.0
 # License: AGPLv3
 # Author: Cameron Garnham <me@da2ce7.com>
 # Repository: https://github.com/da2ce7/git-subtree-report
@@ -73,6 +73,136 @@ declare context_arg="."
 declare subtree_arg="."
 declare -i max_file_size_arg=1048576 # Default 1MiB (1MB)
 
+### Centralized Error Handler
+# This script employs a structured error handling system. Its heart is this
+# single function, `fail_with`, which centralizes all exit conditions.
+# Each error message is designed to be a three-part admonition:
+# 1. [ALARM]   A clear, machine-parsable code and name (e.g., ERROR 23: E_PATH_NOT_RELATIVE).
+# 2. [SITUATION] A concise, human-readable statement of what happened.
+# 3. [POINTER]   Actionable advice on how to resolve the issue.
+# This approach turns cryptic failures into helpful guidance.
+fail_with() {
+	local code="$1"
+	shift
+	local message=""
+
+	# Domain 1-19: Environment & Dependencies
+	case "$code" in
+	2)
+		message="ERROR 2 (E_BASH_VERSION): Bash version is below the minimum requirement.\n"
+		message+="Situation: This script requires Bash v${MIN_BASH_MAJOR}.0 or newer, but your version is ${BASH_VERSION%%.*}.\n"
+		message+="Pointer:   Please upgrade your Bash installation to continue."
+		;;
+	3)
+		message="ERROR 3 (E_GIT_VERSION): Git version is below the minimum requirement.\n"
+		message+="Situation: This script requires Git v${MIN_GIT_MAJOR}.${MIN_GIT_MINOR} or newer, but your version is %s.\n"
+		message+="Pointer:   Please upgrade your Git installation to continue."
+		;;
+	4)
+		message="ERROR 4 (E_PERL_VERSION): Perl version is below the minimum requirement.\n"
+		message+="Situation: This script requires Perl v${MIN_PERL_MAJOR}.${MIN_PERL_MINOR} or newer, but your version is %s.\n"
+		message+="Pointer:   Please upgrade your Perl installation to continue."
+		;;
+	5)
+		message="ERROR 5 (E_CMD_NOT_FOUND): A required command is not in your PATH.\n"
+		message+="Situation: The command '%s' is essential for the script but could not be found.\n"
+		message+="Pointer:   Please install the command or ensure its location is in your system's PATH variable."
+		;;
+	6)
+		message="ERROR 6 (E_LOCALE_FAILURE): The required C.UTF-8 locale is not available.\n"
+		message+="Situation: The script requires the C.UTF-8 locale for consistent text processing, which is not present.\n"
+		message+="Pointer:   Run 'locale -a' to see available locales and ensure C.UTF-8 is configured on your system."
+		;;
+
+	# Domain 20-39: Arguments & Input
+	20)
+		message="ERROR 20 (E_INVALID_OPTION): An invalid option was provided.\n"
+		message+="Situation: The option '-%s' is not supported by this script.\n"
+		message+="Pointer:   Run the script with '--help' to see a list of valid options."
+		;;
+	21)
+		message="ERROR 21 (E_MISSING_ARG): An option is missing its required argument.\n"
+		message+="Situation: The option '-%s' requires a value that was not provided.\n"
+		message+="Pointer:   Please provide an argument (e.g., '-r <ref>', '-s <size>'). See '--help' for usage."
+		;;
+	22)
+		message="ERROR 22 (E_INVALID_SIZE): Invalid size format provided to the -s option.\n"
+		message+="Situation: The value '%s' is not a valid IEC size format.\n"
+		message+="Pointer:   Use a format like '10M' (megabytes), '500K' (kilobytes), or raw bytes."
+		;;
+	23)
+		message="ERROR 23 (E_PATH_NOT_RELATIVE): The path for the -t option must be relative.\n"
+		message+="Situation: You provided an absolute path ('%s') which starts with '/'.\n"
+		message+="Pointer:   Please provide a path relative to the repository root (e.g., 'src/component')."
+		;;
+
+	# Domain 40-124: Runtime & Logic
+	40)
+		message="ERROR 40 (E_INTERNAL_LOGIC): An internal logic error occurred.\n"
+		message+="Situation: An unexpected state was reached in the function '%s'.\n"
+		message+="Pointer:   This is likely a bug. Please report it at the script's repository with details."
+		;;
+	41)
+		message="ERROR 41 (E_METADATA_MISMATCH): Inconsistent file metadata was detected.\n"
+		message+="Situation: %s\n"
+		message+="Pointer:   This indicates a problem during the Git data collection phase. Ensure the repository is not corrupt."
+		;;
+
+	# Domain 128-140: Security & High-Level State
+	128)
+		message="ERROR 128 (E_NOT_A_REPO): The target directory is not a Git repository.\n"
+		message+="Situation: Could not find a '.git' directory at or above the path '%s'.\n"
+		message+="Pointer:   Please run this script from within a Git repository or use '-C /path/to/repo' to specify one."
+		;;
+	129)
+		message="ERROR 129 (E_INVALID_CONTEXT): This operation requires running from the repository root.\n"
+		message+="Situation: Current directory is '%s' but must be the repository root '%s'.\n"
+		message+="Pointer:   This is required when using a bare repository or combining '-C' with '-t'. Please 'cd' to the root and retry."
+		;;
+	130)
+		message="ERROR 130 (E_INVALID_REF): The provided Git reference is invalid or not a commit.\n"
+		message+="Situation: The reference '%s' could not be resolved to a valid commit object.\n"
+		message+="Pointer:   Please use a valid tag, branch, or full commit SHA. Ensure your repository is up to date."
+		;;
+	131)
+		message="ERROR 131 (E_SUBTREE_NOT_FOUND): The specified subtree path does not exist.\n"
+		message+="Situation: The path '%s' was not found in the tree of commit '%s'.\n"
+		message+="Pointer:   Use 'git ls-tree %s' to list valid paths from the root of the commit."
+		;;
+	132)
+		message="ERROR 132 (E_SUBTREE_NOT_DIR): The specified subtree path is not a directory.\n"
+		message+="Situation: The path '%s' resolved to a '%s' object, not a directory (tree).\n"
+		message+="Pointer:   The -t option must point to a directory within the repository."
+		;;
+	134)
+		message="ERROR 134 (E_GIT_FAILURE): A core Git command failed during execution.\n"
+		message+="Situation: The command 'git %s' failed unexpectedly.\n"
+		message+="Pointer:   Ensure your Git installation is sound and the repository is not corrupt."
+		;;
+	135)
+		message="ERROR 135 (E_SYMLINK_IN_PATH): A symbolic link was detected in the -C path.\n"
+		message+="Situation: The security check found a symlink at '%s' within the provided path argument '%s'.\n"
+		message+="Pointer:   For security reasons, this is disallowed. Please provide the canonical path. Use 'readlink -f %s' to resolve it."
+		;;
+
+	141)
+		message="ERROR 141 (E_PIPEFAIL): A command in a pipeline failed.\n"
+		message+="Situation: Execution was terminated by a broken pipe. This often happens if the output is piped to a command (like 'head') which closes the stream early.\n"
+		message+="Pointer:   This is often not a critical error. If the output seems incomplete, try running without piping to another command."
+		;;
+
+	*)
+		message="FATAL ERROR 1 (%s): An unhandled error occurred.\n"
+		message+="Pointer: This is a bug. Please report it."
+		code=1
+		;;
+	esac
+
+	# shellcheck disable=SC2059
+	printf "$message\n" "$@" >&2
+	exit "$code"
+}
+
 ### Argument Parsing
 parse_arguments() {
 	while getopts ":e:r:C:ot:s:" opt; do
@@ -97,23 +227,19 @@ parse_arguments() {
 			subtree_arg="$OPTARG"
 			# Path validation
 			if [[ "$subtree_arg" = /* ]]; then
-				echo "ERROR: -t path must be relative" >&2
-				exit 130
+				fail_with 23 "$subtree_arg"
 			fi
 			;;
 		s)
 			if ! max_file_size_arg=$(numfmt --from=iec "$OPTARG"); then
-				echo "ERROR: Invalid size format for -s: '$OPTARG'" >&2
-				exit 1
+				fail_with 22 "$OPTARG"
 			fi
 			;;
 		\?)
-			echo "Invalid option: -$OPTARG" >&2
-			exit 1
+			fail_with 20 "$OPTARG"
 			;;
 		:)
-			echo "Option -$OPTARG requires argument" >&2
-			exit 1
+			fail_with 21 "$OPTARG"
 			;;
 		esac
 	done
@@ -147,12 +273,7 @@ setup_environment() {
 	# Critical root assertion
 	if ( ! ((has_working_tree))) || ( ((context_arg_set)) && ((subtree_arg_set))); then
 		if [[ "$working_dir" != "$repo_root" ]]; then
-			echo "ERROR: Must operate at repo root when:" >&2
-			echo " - Using bare repository" >&2
-			echo " - Combining -C and -t flags" >&2
-			echo "Current working dir: $working_dir" >&2
-			echo "Repo root:          $repo_root" >&2
-			exit 129
+			fail_with 129 "$working_dir" "$repo_root"
 		fi
 	fi
 
@@ -174,7 +295,6 @@ setup_environment() {
 ### Security & Directory Handling
 # verify_no_symlinks_in_path - Security check to prevent TOCTOU vulnerabilities.
 # It traverses a path upwards from the target, ensuring no component is a symbolic link.
-# NOTE: This temporary version uses the script's original error style.
 verify_no_symlinks_in_path() {
 	local path_to_check="$1"
 	local original_path="$path_to_check"
@@ -187,10 +307,7 @@ verify_no_symlinks_in_path() {
 	# before the script `cd`s into it.
 	while [[ "$path_to_check" != "/" && "$path_to_check" != "." ]]; do
 		if [ -L "$path_to_check" ]; then
-			echo "ERROR: Security check failed: Symbolic link detected at '$path_to_check'." >&2
-			echo "Hint: The path provided via -C ('$original_path') contains a symlink, which is disallowed for security reasons." >&2
-			echo "Hint: Please use the canonical path. You can resolve it with: readlink -f '$original_path'" >&2
-			exit 135 # Use a specific exit code for this security failure.
+			fail_with 135 "$path_to_check" "$original_path" "$original_path"
 		fi
 		path_to_check=$(dirname "$path_to_check")
 	done
@@ -204,8 +321,8 @@ handle_directory_change() {
 	verify_no_symlinks_in_path "$context_arg"
 
 	if ! cd -- "$context_arg"; then
-		echo "ERROR: Failed to establish context (-C)" >&2
-		exit 129
+		# Use E_GIT_FAILURE as a generic for "a critical external command failed"
+		fail_with 134 "cd -- \"$context_arg\""
 	fi
 	working_dir=$(pwd -P)
 	readonly working_dir # Final value assigned
@@ -213,17 +330,15 @@ handle_directory_change() {
 
 ### Repository Validation
 check_git_repository() {
-	if ! git rev-parse --git-dir 1>/dev/null; then
-		echo "Not a git repository" >&2
-		exit 129
+	if ! git rev-parse --git-dir &>/dev/null; then
+		fail_with 128 "$working_dir"
 	fi
 }
 
 determine_repo_type() {
 	local worktree_status
 	if ! worktree_status=$(git rev-parse --is-inside-work-tree); then
-		echo "FATAL: Failed to determine repository type" >&2
-		exit 1
+		fail_with 41 "Failed to determine repository type via 'git rev-parse'."
 	fi
 
 	if [[ "$worktree_status" == "true" ]]; then
@@ -246,8 +361,7 @@ determine_repo_root() {
 	echo "Resolved repo root: $repo_root" >&2
 
 	if [[ ! -d "$repo_root" ]]; then
-		echo "Invalid repository root" >&2
-		exit 129
+		fail_with 41 "Resolved repository root '$repo_root' is not a valid directory."
 	fi
 }
 
@@ -265,10 +379,10 @@ determine_subtree_path() {
 		# NORMALIZATION POINT FOR -t INPUT
 		subdir_rel="${subtree_arg%/}" # Trim trailing slash
 
-		# RELATIVE PATH VALIDATION
+		# RELATIVE PATH VALIDATION executed in parse_arguments
+		# Kept here as a defensive measure in case of direct function call.
 		if [[ "$subdir_rel" == /* ]]; then
-			echo "ERROR: -t path must be relative" >&2
-			exit 130
+			fail_with 23 "$subdir_rel"
 		fi
 
 		subdir_rel=$(printf "%s" "$subdir_rel" | tr -s '/')
@@ -285,11 +399,8 @@ determine_subtree_path() {
 
 verify_subtree_exists() {
 	if [[ "$subdir_rel" != "." ]]; then
-		# Use the resolved ref_hash, not HEAD
 		if ! git ls-tree --name-only "$ref_hash" "$subdir_rel" &>/dev/null; then
-			echo "ERROR: Subtree path '$subdir_rel' not found in commit ${ref_hash:0:8}" >&2
-			echo "HINT: Use 'git ls-tree HEAD' to see available paths" >&2
-			exit 1
+			fail_with 131 "$subdir_rel" "${ref_hash:0:8}" "${ref_hash:0:8}"
 		fi
 	fi
 
@@ -302,14 +413,12 @@ verify_subtree_exists() {
 
 	local tree_type
 	tree_type=$(git cat-file -t "$tree_path") || {
-		echo "ERROR: Path '$subdir_rel' exists but is inaccessible" >&2
-		exit 1
+		fail_with 134 "cat-file -t \"$tree_path\""
 	}
 	readonly tree_type # Used only here, made read-only to prevent accidental reuse
 
 	if [[ "$tree_type" != "tree" ]]; then
-		echo "ERROR: Path '$subdir_rel' is not a directory (found $tree_type)" >&2
-		exit 1
+		fail_with 132 "$subdir_rel" "$tree_type"
 	fi
 }
 
@@ -318,19 +427,11 @@ resolve_commit() {
 	echo "Resolving commit: $git_ref_arg" >&2
 
 	if ! ref_hash=$(git rev-parse "$git_ref_arg"); then
-		if ((git_ref_arg_set)) && [[ "$git_ref_arg" != "HEAD" ]]; then
-			echo "ERROR: Invalid commit reference: '$git_ref_arg'" >&2
-			exit 1
-		else
-			echo "ERROR: Default HEAD reference is invalid" >&2
-			echo "HINT: Check if repository is in valid state" >&2
-			exit 1
-		fi
+		fail_with 130 "$git_ref_arg"
 	fi
 
 	if ! git cat-file -e "$ref_hash^{commit}"; then
-		echo "ERROR: Object $ref_hash exists but is not a commit" >&2
-		exit 1
+		fail_with 130 "$ref_hash (not a commit object)"
 	fi
 
 	readonly ref_hash # Final value assigned
@@ -339,10 +440,7 @@ resolve_commit() {
 
 ### Utility Validators
 check_bash_version() {
-	((BASH_VERSINFO[0] >= MIN_BASH_MAJOR)) || {
-		echo "Requires Bash v$MIN_BASH_MAJOR+ (current: $BASH_VERSION)" >&2
-		exit 1
-	}
+	((BASH_VERSINFO[0] >= MIN_BASH_MAJOR)) || fail_with 2
 }
 
 check_git_version() {
@@ -353,16 +451,14 @@ check_git_version() {
 	minor=${minor:-0}
 
 	if ((major < MIN_GIT_MAJOR || (major == MIN_GIT_MAJOR && minor < MIN_GIT_MINOR))); then
-		echo "ERROR: Need Git $MIN_GIT_MAJOR.$MIN_GIT_MINOR+ (found $version_str)" >&2
-		exit 1
+		fail_with 3 "$version_str"
 	fi
 }
 
 check_perl_version() {
 	local version_str major minor patch
 	if ! version_str=$(perl -e 'print $^V' 2>/dev/null); then
-		echo "ERROR: Failed to check Perl version" >&2
-		exit 1
+		fail_with 41 "Failed to execute 'perl -e print \$^V' to check version"
 	fi
 
 	version_str=${version_str#v}
@@ -373,19 +469,16 @@ check_perl_version() {
 
 	if ((major < MIN_PERL_MAJOR)) ||
 		((major == MIN_PERL_MAJOR && minor < MIN_PERL_MINOR)); then
-		echo "ERROR: Perl $MIN_PERL_MAJOR.$MIN_PERL_MINOR+ required" >&2
-		echo "Found version: $major.$minor.$patch" >&2
-		exit 1
+		local found_version
+		found_version=$(printf "%d.%d.%d" "$major" "$minor" "$patch")
+		fail_with 4 "$found_version"
 	fi
 }
 
 check_required_commands() {
 	check_bash_version
 	for cmd in "${UNIX_COMMANDS[@]}"; do
-		command -v "$cmd" >/dev/null || {
-			echo "Missing required command: $cmd" >&2
-			exit 1
-		}
+		command -v "$cmd" >/dev/null || fail_with 5 "$cmd"
 	done
 	check_git_version
 	check_perl_version
@@ -393,8 +486,7 @@ check_required_commands() {
 
 check_utf8_locale() {
 	if ! locale -a | grep -qiE "C\.(utf-?8|UTF-?8)"; then
-		echo "C.UTF-8 locale required (available: $(locale -a | tr '\n' ' '))" >&2
-		exit 1
+		fail_with 6
 	fi
 	export LC_ALL=C.UTF-8
 
@@ -416,33 +508,28 @@ declare root_tree_hash # SHA of ref_hash's tree (entire repo)
 declare sub_tree_hash  # SHA of target subtree
 
 get_tree_hashes() {
-	root_tree_hash=$(git -C "$repo_root" rev-parse "${ref_hash}^{tree}") || {
-		echo "ERROR: Failed to resolve root tree" >&2
-		exit 1
-	}
+	root_tree_hash=$(git -C "$repo_root" rev-parse "${ref_hash}^{tree}") ||
+		fail_with 41 "Failed to resolve root tree for commit '${ref_hash:0:8}'."
+
 	readonly root_tree_hash # Final value assigned
 
 	if [[ "$subdir_rel" == "." ]]; then
 		sub_tree_hash="$root_tree_hash"
 		echo "Processing entire repository tree" >&2
 	else
-		local sub_tree_entry
-		sub_tree_entry=$(git -C "$repo_root" ls-tree "$root_tree_hash" "$subdir_rel") || {
-			echo "ERROR: Path '$subdir_rel' not found in repository" >&2
-			exit 1
-		}
+		local sub_tree_entry sub_tree_type
+		sub_tree_entry=$(git -C "$repo_root" ls-tree "$root_tree_hash" "$subdir_rel") ||
+			fail_with 131 "$subdir_rel" "${ref_hash:0:8}" "${ref_hash:0:8}"
 		readonly sub_tree_entry # Used only here, locked for safety
 
-		[[ "$(awk '{print $2}' <<<"$sub_tree_entry")" == "tree" ]] || {
-			echo "ERROR: '$subdir_rel' is not a directory" >&2
-			exit 1
-		}
+		sub_tree_type=$(awk '{print $2}' <<<"$sub_tree_entry")
+		[[ "$sub_tree_type" == "tree" ]] ||
+			fail_with 132 "$subdir_rel" "$sub_tree_type"
+
 		sub_tree_hash=$(awk '{print $3}' <<<"$sub_tree_entry")
 
-		git -C "$repo_root" cat-file -e "$sub_tree_hash^{tree}" || {
-			echo "ERROR: Invalid subtree hash '$sub_tree_hash'" >&2
-			exit 1
-		}
+		git -C "$repo_root" cat-file -e "$sub_tree_hash^{tree}" ||
+			fail_with 41 "Subtree object '$sub_tree_hash' for path '$subdir_rel' is invalid or not a tree."
 	fi
 	readonly sub_tree_hash # Final value assigned
 }
@@ -480,8 +567,7 @@ collect_path_is_included() {
 
 	# Validate that modes were captured for all blobs
 	if [[ ${#path_to_mode[@]} -ne $original_subtree_files_count ]]; then
-		echo "ERROR: Mismatch in file modes captured (${#path_to_mode[@]}) vs. blobs ($original_subtree_files_count)" >&2
-		exit 1
+		fail_with 41 "Mismatch in file modes captured (${#path_to_mode[@]}) vs. blobs ($original_subtree_files_count)."
 	fi
 	readonly -A path_to_blob path_to_mode # Fully populated
 
@@ -509,8 +595,7 @@ collect_path_is_included() {
 	# Validate that sizes were captured for all unique blobs
 	for sha in "${unique_shas[@]}"; do
 		if [[ ! -v blob_to_size["$sha"] ]]; then
-			echo "ERROR: No size found for blob $sha" >&2
-			exit 1
+			fail_with 41 "No size found for blob $sha."
 		fi
 	done
 
@@ -682,7 +767,7 @@ validate_path_metadata() {
 
 ### Attribute Processing
 collect_attribute_data() {
-	local path normalized_path rel_path
+	local path normalized_path rel_path remaining
 	[[ ${#path_is_included[@]} -eq 0 ]] && return
 
 	local -a validated_paths=()
@@ -694,10 +779,12 @@ collect_attribute_data() {
 	echo -n "Scanning Git attributes... " >&2
 
 	while IFS= read -d $'\0' -r line; do
-		path="${line%%$'\n'*}" remaining="${line#*$'\n'}"
+		path="${line%%$'\n'*}"
+		remaining="${line#*$'\n'}"
 		normalized_path=$(normalize_path "$path")
 		rel_path="${normalized_path#"${subdir_rel}/"}"
 
+		[[ "$subdir_rel" == "." ]] && rel_path="$normalized_path"
 		[[ -v path_to_blob["$rel_path"] ]] || continue
 
 		while [[ "$remaining" =~ ([^:]+):\ ([^\n]+)(\n|$) ]]; do
@@ -911,8 +998,7 @@ buffer_append() {
 	elif [[ "$current_buffer" == "CONCLUSION" ]]; then
 		CONCLUSION_BUFFER+="$append_text"$'\n'
 	else
-		echo "ERROR: unknown buffer: $current_buffer" >&2
-		exit 1
+		fail_with 40 "buffer_append: unknown buffer '$current_buffer'"
 	fi
 }
 
@@ -923,8 +1009,7 @@ buffer_reset() {
 	elif [[ "$current_buffer" == "CONCLUSION" ]]; then
 		CONCLUSION_BUFFER=""
 	else
-		echo "ERROR: unknown buffer: $current_buffer" >&2
-		exit 1
+		fail_with 40 "buffer_reset: unknown buffer '$current_buffer'"
 	fi
 }
 
@@ -1157,27 +1242,18 @@ collect_report_data() {
 }
 
 validate_report_data() {
-	# Metric consistency guards
-	local -i error_count=0
-
+	# Metric consistency guards. Exits immediately on first failure.
 	if [[ ! -v report_data[file_counts_included] ]]; then
-		echo "ERROR: Critical field missing - included file count not tracked" >&2
-		((error_count++))
-	else
-		if ! [[ "${report_data[file_counts_included]}" =~ ^[0-9]+$ ]]; then
-			echo "ERROR: Invalid file count type (non-integer detected)" >&2
-			((error_count++))
-		elif ((report_data[file_counts_included] < 0)); then
-			echo "ERROR: Invalid file count (negative value)" >&2
-			((error_count++))
-		fi
+		fail_with 41 "Critical report field missing: 'file_counts_included'."
 	fi
 
-	if ((error_count > 0)); then
-		echo "CRITICAL: Report validation failed with $error_count errors" >&2
-		return 1
+	if ! [[ "${report_data[file_counts_included]}" =~ ^[0-9]+$ ]]; then
+		fail_with 41 "Invalid report data: 'file_counts_included' is not an integer."
 	fi
-	return 0
+
+	if ((report_data[file_counts_included] < 0)); then
+		fail_with 41 "Invalid report data: 'file_counts_included' is negative."
+	fi
 }
 
 ### IV. Report Composition Engine
@@ -1283,8 +1359,7 @@ add_submodule_details() {
 	local rel_path url
 	while IFS= read -r rel_path; do
 		if [[ ! -v path_to_blob["$rel_path"] ]]; then
-			echo "ERROR: No blob hash for $rel_path" >&2
-			exit 1
+			fail_with 41 "No blob hash found for submodule path: $rel_path"
 		fi
 		url="${path_to_submodule_url[$rel_path]}"
 		buffer_append "    - ${rel_path} $(apply_color "[🢒 ${url}]" "${COLORS[detail]}")"
@@ -1296,8 +1371,7 @@ add_symlink_details() {
 	local rel_path dest blob_hash
 	while IFS= read -r rel_path; do
 		if [[ ! -v path_to_blob["$rel_path"] ]]; then
-			echo "ERROR: No blob hash for $rel_path" >&2
-			exit 1
+			fail_with 41 "No blob hash found for symlink path: $rel_path"
 		fi
 		blob_hash="${path_to_blob[$rel_path]}"
 		dest="${blob_to_symlink[$blob_hash]:-<target not found>}"
@@ -1317,8 +1391,7 @@ add_simple_size_details() {
 	oversize) target_array="blob_is_oversize" ;;
 	invalid_utf8) target_array="blob_has_invalid_utf8" ;;
 	*)
-		echo "ERROR: Unknown array_name $array_name" >&2
-		exit 1
+		fail_with 40 "add_simple_size_details: Unknown array_name '$array_name'"
 		;;
 	esac
 
@@ -1361,8 +1434,7 @@ add_lfs_details() {
 	local max_pointer_len=0 max_stored_len=0 rel_path blob_hash pointer_formatted stored_formatted len_pointer len_stored padded_pointer padded_stored prefix
 	while IFS= read -r rel_path; do
 		if [[ ! -v path_to_blob["$rel_path"] ]]; then
-			echo "ERROR: No blob hash for $rel_path" >&2
-			exit 1
+			fail_with 41 "No blob hash found for LFS path: $rel_path"
 		fi
 		blob_hash="${path_to_blob[$rel_path]}"
 		pointer_formatted="${blob_to_size_pretty[$blob_hash]}"
@@ -1526,19 +1598,17 @@ output_concat() {
 			concat_paths["$rel_path"]=1
 		fi
 	done
-	mapfile -t sorted_paths < <(printf '%s\n' "${!concat_paths[@]}" | sort -V)
+	mapfile -t sorted_paths < <(printf "%s\n" "${!concat_paths[@]}" | sort -V)
 	readonly -a sorted_paths
 
 	for rel_path in "${sorted_paths[@]}"; do
 		local blob_hash="${path_to_blob[$rel_path]}"
 		if [[ -z "$blob_hash" ]]; then
-			echo "ERROR: Missing blob hash for path '$rel_path'" >&2
-			exit 129
+			fail_with 41 "Missing blob hash for file to concatenate: $rel_path"
 		fi
 		printf "\n%s\n" "╭──▶ 𝚏𝚒𝚕𝚎: ${rel_path} ◀──╮" >&1
 		if ! git -C "$repo_root" cat-file blob "$blob_hash"; then
-			echo "ERROR: Failed to retrieve '$rel_path' (blob: ${blob_hash:0:8})" >&2
-			exit 1
+			fail_with 134 "cat-file blob ${blob_hash:0:8}"
 		fi
 		printf "\n%s\n\n" "╰──◈ 𝚎𝚗𝚍: ${rel_path} ◈──╯" >&1
 	done
@@ -1555,7 +1625,7 @@ output_report() {
 	add_file_analysis
 	add_size_analysis
 	add_exclusion_details
-	validate_report_data || exit 1
+	validate_report_data
 
 	if ((concatenate_flag)); then
 		current_buffer="INTRODUCTION"
@@ -1586,18 +1656,34 @@ main() {
 		echo "⚠️  Warning: No blobs passed safety checks" >&2
 }
 
-### Error and Pipe Message Formatting
-trap 'echo "‼️  Critical failure at line $LINENO. Check stderr." >&2; exit 2' ERR
-trap 'echo "‼️  Unexpected pipe failure" >&2; exit 141' PIPE
-
+### Post-Execution Information
 show_runtime_info() {
 	# Resource usage stats
-	echo "Processed ${report_data[file_counts_included]} of ${report_data[file_counts_total_pre_exclusion]} files" >&2
-	echo "Completed in ${SECONDS} seconds" >&2
+	echo >&2 # Add a newline for clean separation
+	add_divider "${BOX_CHARS[line_single]}" 80 "detail" >&2
+	echo "  Processed ${report_data[file_counts_included]} of ${report_data[file_counts_total_pre_exclusion]} files in ${SECONDS}s." >&2
 }
 
 ### Final Execution Flow
+# The main function is executed within a subshell to capture its exit status.
+# - If main() succeeds (exit 0), show_runtime_info runs, and the script exits cleanly.
+# - If a command inside main() fails, `set -e` causes it to exit with a non-zero status.
+# - If fail_with() is called, main() exits with the code specified by fail_with.
+# The '||' block catches any non-zero exit code ($?).
+# We specifically check for exit code 141 (SIGPIPE) to provide a helpful message.
+# For all other error codes, fail_with() has already printed the error,
+# so we simply propagate the original exit code.
 {
-	time main "$@"
+	main "$@"
 	show_runtime_info
-} && exit 0 || exit 3
+} || {
+	ret=$?
+	if [[ $ret -eq 141 ]]; then
+		fail_with 141
+	else
+		# fail_with has already run, so just exit with its status code.
+		exit "$ret"
+	fi
+}
+
+exit 0

@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.4.0] - 2025-07-05
+
+### Added
+
+-   **Structured Error Handling:** Implemented a new, centralized error handling system. All script failures now produce a detailed three-part message: a machine-parsable error code, a description of the situation, and actionable advice on how to resolve the issue.
+
+### Changed
+
+-   Replaced all ad-hoc `exit` calls and error traps with the new `fail_with` function for consistent, maintainable, and highly user-friendly error reporting. The script's exit logic was also overhauled for more robust `SIGPIPE` handling.
+
+
 ## [1.3.0] - 2025-07-05
 
 ### Security

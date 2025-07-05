@@ -1,6 +1,7 @@
 {
     "words": [
         "bindir",
+        "bugtracker",
         "Ceuo",
         "concatenatable",
         "endforeach",
@@ -9,7 +10,9 @@
         "gitmodules",
         "gsub",
         "gztar",
+        "launchable",
         "mandir",
+        "metainfo",
         "nonprint",
         "numfmt",
         "objectname",

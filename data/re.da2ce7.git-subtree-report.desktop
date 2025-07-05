@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Git Subtree Report
+Comment=Analyze Git repositories without checking out files (note: requires git context for useful operation)
+Exec=git-subtree-report
+Terminal=true
+Categories=Development;Utility;

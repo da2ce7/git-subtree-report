@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="console-application">
+  <id>re.da2ce7.git-subtree-report</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-or-later</project_license>
+  <name>Git Subtree Report</name>
+  <summary>Analyze Git repositories without checking out files</summary>
+  <description>
+    <p>
+      Git Subtree Report is a powerful, zero-footprint analysis tool for developers, auditors, and CI/CD systems. It operates with the precision of a master historian, reading the soul of a Git repository directly from its object database without disturbing the filesystem.
+    </p>
+    <p>
+      This allows you to safely and efficiently inspect any commit, branch, or tag—even in multi-gigabyte repositories—to understand its structure and content.
+    </p>
+    <ul>
+      <li>Visualize the full file tree of any repository subtree.</li>
+      <li>Perform deep content analysis to detect binary data, invalid UTF-8, and other non-textual elements.</li>
+      <li>Identify special files like submodules, symbolic links, and Git LFS pointers.</li>
+      <li>Generate a clean, safe concatenation of all text-based files for review or processing.</li>
+      <li>Operate in a pure read-only mode, making it perfect for security-sensitive environments.</li>
+    </ul>
+  </description>
+  <screenshots>
+    <screenshot type="default">
+      <caption>The log created when generating a report of this repository.</caption>
+      <image>https://raw.githubusercontent.com/da2ce7/git-subtree-report/main/docs/screenshot.png</image>
+    </screenshot>
+  </screenshots>
+  <url type="homepage">https://github.com/da2ce7/git-subtree-report</url>
+  <url type="bugtracker">https://github.com/da2ce7/git-subtree-report/issues</url>
+  <launchable type="desktop-id">re.da2ce7.git-subtree-report.desktop</launchable>
+  <releases>
+    <release version="1.0.0" date="2025-04-17">
+      <description>
+        <p>Initial stable release.</p>
+        <ul>
+          <li>Full repository and subtree analysis.</li>
+          <li>Concatenation safety checks and output mode.</li>
+          <li>Submodule, symlink, and LFS detection.</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+  <content_rating type="oars-1.1" />
+</component>

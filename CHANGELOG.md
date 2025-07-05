@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.4.2] - 2025-07-06
+
+### Added
+
+-   Desktop integration files, including AppStream metadata (`.metainfo.xml`) and a `.desktop` entry. This allows the application to be discoverable and displayed correctly in Linux software centers and application menus.
+
+
 ## [1.4.1] - 2025-07-05
 
 ### Fixed

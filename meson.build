@@ -1,6 +1,6 @@
 project(
     'git-subtree-report',
-    version: '1.4.1',
+    version: '1.4.2',
     license: 'AGPL-3.0',
     meson_version: '>=0.56.0',
     default_options: [
@@ -27,6 +27,18 @@ endforeach
 # Installation paths using get_option
 script_install_dir = get_option('bindir')
 doc_install_dir = get_option('datadir') / 'doc' / meson.project_name()
+
+# Install AppStream metadata for software centers
+install_data(
+    'data/re.da2ce7.git-subtree-report.metainfo.xml',
+    install_dir: get_option('datadir') / 'metainfo'
+)
+
+# Install the .desktop file for application launchers
+install_data(
+    'data/re.da2ce7.git-subtree-report.desktop',
+    install_dir: get_option('datadir') / 'applications'
+)
 
 # Main executable installation
 install_data(

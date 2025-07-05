@@ -2,7 +2,7 @@
 
 # git_subtree_report.sh - Analyze Git repositories and subtrees without filesystem interaction
 #
-# Version: 1.4.0
+# Version: 1.4.1
 # License: AGPLv3
 # Author: Cameron Garnham <me@da2ce7.com>
 # Repository: https://github.com/da2ce7/git-subtree-report
@@ -10,7 +10,7 @@
 # Usage: git_subtree_report.sh [options]
 #
 # Options:
-#   -e PATTERN    Exclude files matching the given pattern (regex)
+#   -e PATTERN    Exclude files matching the given pattern (ERE)
 #   -r REF        Specify the Git reference to analyze (default: HEAD)
 #   -C DIR        Change to the specified directory before performing operations
 #   -o            Enable output concatenation of safe text files
@@ -289,7 +289,7 @@ setup_environment() {
 	echo "  ├─ Repo root:  $repo_root" >&2
 	echo "  ├─ Working dir: $working_dir" >&2
 	echo "  ├─ Subtree:    ./$subdir_rel" >&2
-	echo "  └─ Exclusion:  ${exclude_pattern_arg:-<none>}" >&2
+	echo "  └─ Exclusion Filter:  '${exclude_pattern_arg:-<none>}'  (ERE)" >&2
 }
 
 ### Security & Directory Handling
@@ -1266,7 +1266,7 @@ add_summary_section() {
 	buffer_append "$(printf "%s %-20s: %s" "${BOX_CHARS[vertical]}" "Analyzed Path" "${subdir_rel:-/}")"
 	buffer_append "$(printf "%s %-20s: %s" "${BOX_CHARS[vertical]}" "Git Commit" "${ref_hash:0:8}")"
 	add_divider "${BOX_CHARS[line_single]}" 80 "detail"
-	buffer_append "$(printf "%s %-20s: %s" "${BOX_CHARS[vertical]}" "Exclusion Filter" "${exclude_pattern_arg:-<none>}")"
+	buffer_append "$(printf "%s %-20s: %s" "${BOX_CHARS[vertical]}" "Exclusion Filter" "'${exclude_pattern_arg:-<none>}'")  (ERE)"
 	buffer_append "$(printf "%s %-20s: %s" "${BOX_CHARS[vertical]}" "Processed Files" "${report_data[file_counts_included]}")"
 }
 
@@ -1547,11 +1547,11 @@ build_additional() {
 output_intro() {
 	# Initial report metadata
 	add_header "GIT SUBTREE CONCATENATION REPORT"
-	buffer_append "$(apply_color " ▸ Repository Root: " "${COLORS[detail]}")$repo_root"
-	buffer_append "$(apply_color " ▸ Target Subtree:  " "${COLORS[detail]}")${subdir_rel:-/}"
-	buffer_append "$(apply_color " ▸ Commit Hash:     " "${COLORS[detail]}")${ref_hash:0:8}"
-	buffer_append "$(apply_color " ▸ Exclusion Filter:" "${COLORS[detail]}")${exclude_pattern_arg:-<none>}"
-	buffer_append "$(apply_color " ▸ Max File Size:   " "${COLORS[detail]}")$(numfmt --to=iec "$max_file_size_arg")"
+	buffer_append "$(apply_color " ▸ Repository Root:   " "${COLORS[detail]}")$repo_root"
+	buffer_append "$(apply_color " ▸ Target Subtree:    " "${COLORS[detail]}")${subdir_rel:-/}"
+	buffer_append "$(apply_color " ▸ Commit Hash:       " "${COLORS[detail]}")${ref_hash:0:8}"
+	buffer_append "$(apply_color " ▸ Exclusion Filter:  " "${COLORS[detail]}")'${exclude_pattern_arg:-<none>}'  (ERE)"
+	buffer_append "$(apply_color " ▸ Max File Size:     " "${COLORS[detail]}")$(numfmt --to=iec "$max_file_size_arg")"
 	add_divider "${BOX_CHARS[line_single]}" 80 "detail"
 }
 

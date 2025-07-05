@@ -1,4 +1,4 @@
-# 🔍 Git Subtree Analyzer & Reporter [![Version 1.4.0](https://img.shields.io/badge/version-1.4.0-blue)](LICENSE.md) [![AGPLv3 License](https://img.shields.io/badge/license-AGPLv3-green)](LICENSE.md)
+# 🔍 Git Subtree Analyzer & Reporter [![Version 1.4.1](https://img.shields.io/badge/version-1.4.1-blue)](LICENSE.md) [![AGPLv3 License](https://img.shields.io/badge/license-AGPLv3-green)](LICENSE.md)
 
 **Zero-Footprint Git Repository Analysis Tool**
 *See into your repository's soul without checking out files!*

@@ -2,12 +2,12 @@ Initializing working context: .
 Work tree detected
 Resolved repo root: /var/home/cameron/dev/git-subtree-report
 Resolving commit: HEAD
-Resolved commit: 1b0d6c85
+Resolved commit: 838f6a4d
 Initialized workspace:
   ├─ Repo root:  /var/home/cameron/dev/git-subtree-report
   ├─ Working dir: /var/home/cameron/dev/git-subtree-report
   ├─ Subtree:    ./.
-  └─ Exclusion:  <none>
+  └─ Exclusion Filter:  '<none>'  (ERE)
 Processing entire repository tree
 Collecting file metadata... found 11 files
 Calculating blob sizes...
@@ -28,6 +28,6 @@ Processed 11 file blobs:
   ◼ Contained invalid UTF8:  0
   ◼ Non-printable/binary:  0
   ◼ Safe text blobs: 11 blobs
-add_file_analysis completed in 0.064 seconds
+add_file_analysis completed in 0.062 seconds
 
-  Processed 11 of 11 files in 0s.
+  Processed 11 of 11 files in 1s.

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.4] - 2025-07-06
+
+### Changed
+
+-   **Project Structure:** Moved the main executable from `src/` to a conventional `bin/` directory to improve standardization.
+-   **Installation:** The script is now installed with its major version number as a suffix (e.g., `git-subtree-report-1`). This prevents conflicts and allows for future parallel installations of different major versions.
+-   Updated all documentation, examples, and build configurations to reflect the new file location and versioned command name.
+
 ## [1.4.3] - 2025-07-06
 
 ### Changed
@@ -103,7 +111,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Concatenation output mode (`-o`).
 -   Comprehensive `README.md`, `LICENSE.md`, and project scaffolding.
 
-[Unreleased]: https://github.com/da2ce7/git-subtree-report/compare/v1.4.2...HEAD
+[Unreleased]: https://github.com/da2ce7/git-subtree-report/compare/v1.4.4...HEAD
+[1.4.4]: https://github.com/da2ce7/git-subtree-report/compare/v1.4.3...v1.4.4
+[1.4.3]: https://github.com/da2ce7/git-subtree-report/compare/v1.4.2...v1.4.3
 [1.4.2]: https://github.com/da2ce7/git-subtree-report/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/da2ce7/git-subtree-report/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/da2ce7/git-subtree-report/compare/v1.3.0...v1.4.0

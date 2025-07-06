@@ -1,10 +1,10 @@
-.\" Manpage for git-subtree-report
+.\" Manpage for git-subtree-report-1
 .\" SPDX-License-Identifier: AGPL-3.0
 .Dd July 06, 2025
 .Dt GIT-SUBTREE-REPORT 1
 .Os
 .Sh NAME
-.Nm git-subtree-report
+.Nm git-subtree-report-1
 .Nd Analyze Git repositories/subtrees for safe file concatenation
 .Sh SYNOPSIS
 .Nm
@@ -54,22 +54,20 @@ Disables colored output when set
 .El
 .Sh FILES
 .Bl -tag -width Ds
-.It Pa /usr/local/bin/git-subtree-report
+.It Pa /usr/local/bin/git-subtree-report-1
 Typical installation path
-.It Pa ~/.config/git-subtree-report/cSpell.json
-Custom spelling dictionary (optional)
 .It Pa examples/initial_commit.txt
 Sample report output
 .El
 .Sh EXAMPLES
 Analyze src/ directory in CI environment:
-.Dl $ git-subtree-report -C /build/repo -t src/ -e '\.csv$' -s 2M
+.Dl $ git-subtree-report-1 -C /build/repo -t src/ -e '\.csv$' -s 2M
 .Pp
 Generate concatenated output for documentation audit:
-.Dl $ git-subtree-report -t docs/ -o | less -R
+.Dl $ git-subtree-report-1 -t docs/ -o | less -R
 .Pp
 Analyze project state from 3 months ago:
-.Dl $ git-subtree-report -r $(git rev-list -n1 --until="3 months ago")
+.Dl $ git-subtree-report-1 -r $(git rev-list -n1 --until="3 months ago")
 .Sh SEE ALSO
 .Xr git 1 ,
 .Xr perl 1 ,

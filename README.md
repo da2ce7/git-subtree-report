@@ -1,4 +1,4 @@
-# 🔍 Git Subtree Analyzer & Reporter [![Version 1.4.3](https://img.shields.io/badge/version-1.4.3-blue)](LICENSE.md) [![AGPLv3 License](https://img.shields.io/badge/license-AGPLv3-green)](LICENSE.md)
+# 🔍 Git Subtree Analyzer & Reporter [![Version 1.4.4](https://img.shields.io/badge/version-1.4.4-blue)](LICENSE.md) [![AGPLv3 License](https://img.shields.io/badge/license-AGPLv3-green)](LICENSE.md)
 
 **Zero-Footprint Git Repository Analysis Tool**
 *See into your repository's soul without checking out files!*
@@ -41,10 +41,10 @@ git clone https://github.com/da2ce7/git-subtree-report.git
 cd git-subtree-report
 
 # Local Installation (ensure that `~/.local/bin` is in your $PATH)
-install -Dm755 src/git_subtree_report.sh ~/.local/bin/git-subtree-report
+install -Dm755 bin/git_subtree_report.sh ~/.local/bin/git-subtree-report-1
 
 # System Installation
-sudo install -m 0755 src/git_subtree_report.sh /usr/local/bin/git-subtree-report
+sudo install -m 0755 bin/git_subtree_report.sh /usr/local/bin/git-subtree-report-1
 ```
 
 ### Meson Build System (preferred)
@@ -91,7 +91,7 @@ meson dist -C build --formats gztar
 ### Advanced Usage
 ```bash
 # Analyze last month's commits in CI/CD pipeline
-git-subtree-report -C "${BUILD_DIR}" \
+git-subtree-report-1 -C "${BUILD_DIR}" \
   -r "$(git rev-list -n1 --since='1 month ago')" \
   -t infrastructure/ \
   -e '\.secret$' \
@@ -102,14 +102,14 @@ git-subtree-report -C "${BUILD_DIR}" \
 
 ### Standard Report
 ```bash
-$ git-subtree-report 1> examples/repo_commit.txt 2> examples/repo_commit.log
+$ git-subtree-report-1 1> examples/repo_commit.txt 2> examples/repo_commit.log
 ```
 [Repo Commit Report](https://github.com/da2ce7/git-subtree-report/examples/repo_commit.txt)
 [Repo Commit Log](https://github.com/da2ce7/git-subtree-report/examples/repo_commit.log)
 
 ### Concatenation Mode
 ```bash
-git-subtree-report -o -t docs/ | less -R
+git-subtree-report-1 -o -t docs/ | less -R
 ```
 Outputs clean concatenation of all safe text files with visual separators
 

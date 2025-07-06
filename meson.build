@@ -1,12 +1,15 @@
 project(
     'git-subtree-report',
-    version: '1.4.3',
+    version: '1.4.4',
     license: 'AGPL-3.0',
     meson_version: '>=0.56.0',
     default_options: [
         'warning_level=2',
     ]
 )
+
+major_version = meson.project_version().split('.')[0]
+versioned_name = meson.project_name() + '-' + major_version
 
 # Core program dependencies with version checks
 required_programs = [
@@ -42,10 +45,10 @@ install_data(
 
 # Main executable installation
 install_data(
-    'src/git_subtree_report.sh',
+    'bin/git_subtree_report.sh',
     install_dir: script_install_dir,
     install_mode: 'rwxr-xr-x',
-    rename: 'git-subtree-report'
+    rename: versioned_name
 )
 
 # Documentation installation
@@ -59,12 +62,14 @@ install_data(
     install_dir: doc_install_dir
 )
 
-man_page = files('man/man1/git-subtree-report.1')
+# Man Page Installation
+man_page_source = 'man/man1/git-subtree-report-1.1'
+man_page_basename = man_page_source.split('/')[-1] # e.g., 'git-subtree-report-1.1'
+man_page_suffix = man_page_basename.split('-')[-1].split('.')[0] # Extracts '1' from '...-1.1'
+assert(man_page_suffix == major_version, 'Man page filename suffix (-' + man_page_suffix + ') does not match project major version (-' + major_version + ').')
 
-# Install man page
 install_man(
-  man_page,
-  install_dir: get_option('mandir') / 'man1'
+  man_page_source,
 )
 
 # Conditionally install examples directory
@@ -87,9 +92,9 @@ meson.add_dist_script(
     '-c',
     '''
     cd "@0@"
-    install -Dm644 man/man1/git-subtree-report.1 -t "$MESON_DIST_ROOT/man/man1"
+    install -Dm644 man/man1/git-subtree-report-1.1 -t "$MESON_DIST_ROOT/man/man1"
     install -Dm644 LICENSE.md README.md -t "$MESON_DIST_ROOT"
-    cp -rp src examples "$MESON_DIST_ROOT"
+    cp -rp bin examples "$MESON_DIST_ROOT"
     '''.format(meson.current_source_dir())
 )
 

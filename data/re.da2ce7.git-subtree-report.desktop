@@ -2,6 +2,6 @@
 Type=Application
 Name=Git Subtree Report
 Comment=Analyze Git repositories without checking out files (note: requires git context for useful operation)
-Exec=git-subtree-report
+Exec=git-subtree-report-1
 Terminal=true
 Categories=Development;Utility;

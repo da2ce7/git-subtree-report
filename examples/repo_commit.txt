@@ -3,7 +3,7 @@
 ================================================================================
  ▸ Repository Root:   /var/home/cameron/dev/git-subtree-report
  ▸ Target Subtree:    .
- ▸ Commit Hash:       ac4cdbdf
+ ▸ Commit Hash:       197daf91
  ▸ Exclusion Filter:  '<none>'  (ERE)
  ▸ Max File Size:     1.0M
 --------------------------------------------------------------------------------
@@ -38,7 +38,7 @@
 ================================================================================
 | Repository Root     : /var/home/cameron/dev/git-subtree-report
 | Analyzed Path       : .
-| Git Commit          : ac4cdbdf
+| Git Commit          : 197daf91
 --------------------------------------------------------------------------------
 | Exclusion Filter    : '<none>'  (ERE)
 | Processed Files     : 14
@@ -48,14 +48,14 @@
   Concatenatable:                13 (92.8%)
   » Concatenatable:
     - [  648.0 (648 bytes)  ] .gitignore
-    - [   5.1K (5215 bytes) ] CHANGELOG.md
+    - [   5.2K (5238 bytes) ] CHANGELOG.md
     - [  33.5K (34260 bytes)] LICENSE.md
     - [   5.2K (5236 bytes) ] README.md
     - [  618.0 (618 bytes)  ] cSpell.json
     - [  237.0 (237 bytes)  ] data/re.da2ce7.git-subtree-report.desktop
     - [   2.3K (2276 bytes) ] data/re.da2ce7.git-subtree-report.metainfo.xml
     - [   1.1K (1055 bytes) ] examples/repo_commit.log
-    - [   2.9K (2935 bytes) ] examples/repo_commit.txt
+    - [   3.3K (3379 bytes) ] examples/repo_commit.txt
     - [  248.0 (248 bytes)  ] examples/zero_commits.txt
     - [   2.6K (2621 bytes) ] man/man1/git-subtree-report.1
     - [   2.5K (2479 bytes) ] meson.build
@@ -73,7 +73,7 @@
 
  * SIZE ANALYSIS
 --------------------------------------------------------------------------------
-  Total size (included files):    213.4K (218460 bytes)
+  Total size (included files):    213.8K (218927 bytes)
   LFS storage size:              0.0B (0 bytes)
   Size threshold:                   1.0M (1048576 bytes)
 

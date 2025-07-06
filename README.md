@@ -1,4 +1,4 @@
-# 🔍 Git Subtree Analyzer & Reporter [![Version 1.4.4](https://img.shields.io/badge/version-1.4.4-blue)](LICENSE.md) [![AGPLv3 License](https://img.shields.io/badge/license-AGPLv3-green)](LICENSE.md)
+# 🔍 Git Subtree Analyzer & Reporter [![Version 1.5.0](https://img.shields.io/badge/version-1.5.0-blue)](LICENSE.md) [![AGPLv3 License](https://img.shields.io/badge/license-AGPLv3-green)](LICENSE.md)
 
 **Zero-Footprint Git Repository Analysis Tool**
 *See into your repository's soul without checking out files!*
@@ -74,14 +74,18 @@ meson dist -C build --formats gztar
 ## 💡 Usage
 
 ### Command Options
-| Option | Description                                  | Example             |
-|--------|----------------------------------------------|---------------------|
-| `-e`   | Exclude files by regex                       | `-e '\.log$'`       |
-| `-r`   | Git reference (commit/branch/tag)            | `-r develop`        |
-| `-C`   | Working directory                            | `-C /path/to/repo`  |
-| `-o`   | Output concatenated safe files               | `-o`                |
-| `-t`   | Subtree path to analyze                      | `-t docs/`          |
-| `-s`   | Max file size for analysis                   | `-s 10M`            |
+
+| Option                    | Description                                                  | Default                 |
+|---------------------------|--------------------------------------------------------------|-------------------------|
+| `-C, --working-dir <DIR>` | Change to directory `<DIR>` before running analysis.         | `.` (current directory) |
+| `-e, --exclude <PATTERN>` | Exclude files matching an Extended Regular Expression.       | (none)                  |
+| `-h, --help`              | Display a detailed help message and exit.                    | (N/A)                   |
+| `-o, --output-concat`     | Enable concatenated output of all safe text files.           | Disabled                |
+| `-r, --ref <REF>`         | Git reference (commit, branch, tag) to analyze.              | `HEAD`                  |
+| `-s, --max-size <SIZE>`   | Set max file size for content analysis (e.g., `1M`, `500K`). | `1M`                    |
+| `-t, --subtree <PATH>`    | Relative path of the subdirectory to analyze.                | `.` (from within repo)  |
+| `--version`               | Display version information and exit.                        | (N/A)                   |
+
 
 ### Basic Example
 ```bash

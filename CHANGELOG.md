@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2025-07-06
+
+### Added
+
+-   **Modern Command-Line Interface:** The script now supports a full-featured CLI, including:
+    -   Long options for all arguments (e.g., `--exclude`, `--ref`) for improved readability in scripts.
+    -   Assignment-style options (e.g., `--ref=develop`).
+    -   A standard `--help` flag (`-h`) for displaying usage information.
+    -   A standard `--version` flag for checking the installed version.
+
+### Changed
+
+-   **Argument Parser Overhaul:** Replaced the legacy `getopts` parser with a robust, custom implementation to enable the new CLI features and provide more resilient error handling for arguments.
+-   **Documentation Sync:** Updated all user-facing documentation (`README.md`, `man` page, and the script's header comments) to reflect the new command options and ensure consistency.
+
 ## [1.4.4] - 2025-07-06
 
 ### Changed
@@ -111,7 +126,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Concatenation output mode (`-o`).
 -   Comprehensive `README.md`, `LICENSE.md`, and project scaffolding.
 
-[Unreleased]: https://github.com/da2ce7/git-subtree-report/compare/v1.4.4...HEAD
+[Unreleased]: https://github.com/da2ce7/git-subtree-report/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/da2ce7/git-subtree-report/compare/v1.4.4...v1.5.0
 [1.4.4]: https://github.com/da2ce7/git-subtree-report/compare/v1.4.3...v1.4.4
 [1.4.3]: https://github.com/da2ce7/git-subtree-report/compare/v1.4.2...v1.4.3
 [1.4.2]: https://github.com/da2ce7/git-subtree-report/compare/v1.4.1...v1.4.2

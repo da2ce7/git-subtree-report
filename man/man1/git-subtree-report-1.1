@@ -8,16 +8,18 @@
 .Nd Analyze Git repositories/subtrees for safe file concatenation
 .Sh SYNOPSIS
 .Nm
-.Op Fl o
-.Op Fl e Ar pattern
-.Op Fl r Ar ref
-.Op Fl C Ar dir
-.Op Fl t Ar path
-.Op Fl s Ar size
+.Op Fl C Ar dir | Fl -working-dir=dir
+.Op Fl e Ar pattern | Fl -exclude=pattern
+.Op Fl h | Fl -help
+.Op Fl o | Fl -output-concat
+.Op Fl r Ar ref | Fl -ref=ref
+.Op Fl s Ar size | Fl -max-size=size
+.Op Fl t Ar path | Fl -subtree=path
+.Op Fl -version
 .Sh DESCRIPTION
 The
 .Nm
-utility performs deep analysis of Git repository subtrees to determine file safety for concatenation outputs. Key features include:
+utility performs deep analysis of Git repository subtrees to determine file safety for concatenation outputs. It operates directly on the Git object database without requiring a checkout. Key features include:
 .Bl -bullet -offset indent
 .It
 Full tree visualization with exclusion patterns
@@ -29,45 +31,57 @@ Integration with Git LFS and submodules
 Historical analysis at any commit reference
 .El
 .Sh OPTIONS
-.Bl -tag -width Ds
-.It Fl C Ar dir
-Change working directory before analysis (supports bare repos)
-.It Fl e Ar pattern
-Exclude paths filter in extended regular expression (ERE) syntax
-.It Fl o
-Enable concatenation output mode (generates combined safe files)
-.It Fl r Ar ref
-Analyze repository state at specified commit/branch/tag
-.It Fl s Ar size
-Set maximum filesize for detailed analysis (e.g., 5M, 100K)
-.It Fl t Ar path
-Subdirectory path to analyze (relative to repo root)
-.It Fl -help
-Show full help message with examples
+The options are as follows:
+.Bl -tag -width "--output-concat"
+.It Fl C Ar dir , Fl -working-dir=dir
+Change working directory before analysis. This is essential for operating on bare repositories.
+.It Fl e Ar pattern , Fl -exclude=pattern
+Exclude paths matching a given extended regular expression (ERE). The pattern is matched against the full path relative to the repository root (e.g.,
+.Ql src/components/main.js ) .
+.It Fl h , Fl -help
+Display the help message with all options and exit.
+.It Fl o , Fl -output-concat
+Enable concatenation output mode. Instead of the summary report, this will print the content of all safe, concatenatable files to standard output, separated by headers.
+.It Fl r Ar ref , Fl -ref=ref
+Analyze the repository state at a specified Git reference (e.g., a branch name, tag, or commit SHA). Defaults to
+.Ql HEAD .
+.It Fl s Ar size , Fl -max-size=size
+Set the maximum file size for detailed content analysis. Files larger than this will be skipped during safety checks. The size can be specified in human-readable format (e.g., 5M, 100K, 1G). Defaults to 1M.
+.It Fl t Ar path , Fl -subtree=path
+Specify a subdirectory path to analyze, relative to the repository root. If not provided, the script analyzes from the current directory's location within the repository.
+.It Fl -version
+Display the version number of the script and exit.
 .El
 .Sh ENVIRONMENT
 .Bl -tag -width Ds
 .It Ev LC_ALL
-Overrides locale settings (requires C.UTF-8)
+Overrides locale settings. The script requires a UTF-8 compatible locale, such as
+.Ql C.UTF-8 ,
+to be available for correct text processing.
 .It Ev NO_COLOR
-Disables colored output when set
+If this variable is set to any value, colored output in the terminal a disabled.
 .El
 .Sh FILES
 .Bl -tag -width Ds
 .It Pa /usr/local/bin/git-subtree-report-1
-Typical installation path
-.It Pa examples/initial_commit.txt
-Sample report output
+Typical installation path for the executable.
 .El
 .Sh EXAMPLES
-Analyze src/ directory in CI environment:
+Analyze the
+.Ql src/
+directory in a CI environment, excluding CSV files and setting a 2MB size limit:
 .Dl $ git-subtree-report-1 -C /build/repo -t src/ -e '\.csv$' -s 2M
 .Pp
-Generate concatenated output for documentation audit:
+Generate a concatenated output for all text files in the
+.Ql docs/
+directory for a quick audit:
 .Dl $ git-subtree-report-1 -t docs/ -o | less -R
 .Pp
 Analyze project state from 3 months ago:
-.Dl $ git-subtree-report-1 -r $(git rev-list -n1 --until="3 months ago")
+.Dl $ git-subtree-report-1 -r $(git rev-list -n1 --until="3 months ago" main)
+.Pp
+Perform a security audit using long options for clarity:
+.Dl $ git-subtree-report-1 --working-dir /srv/app --subtree api/ --exclude '\.secret(s)?$' --output-concat > api_audit.txt
 .Sh SEE ALSO
 .Xr git 1 ,
 .Xr perl 1 ,
@@ -78,28 +92,19 @@ Analyze project state from 3 months ago:
 Special considerations for repository types:
 .Bl -bullet
 .It
-For bare repositories:
-.Bl -bullet
-.It
-Must be invoked from repository root directory, OR
-.It
-Use
-.Fl C Ar /path/to/bare/repo.git
-to specify full path to repository root
-.El
+For bare repositories, you must either invoke the script from the repository's root directory or use the
+.Fl C
+option to specify the full path to the repository (e.g.,
+.Pa /path/to/bare/repo.git ) .
 .It
 When combining
 .Fl C
 and
-.Fl t :
-.Bl -bullet
-.It
+.Fl t ,
+the path for
 .Fl C
-must always point to repository root (never subdirectories)
+must always point to the repository root, not a subdirectory within it.
 .It
-.Fl t Ar path
-resolves relative to repository root (not working directory)
-.El
-.It
-All operations prevent upward path traversal (e.g., ../)
+All path operations are contained within the repository and prevent upward traversal (e.g., using
+.Ql ../ ) .
 .El

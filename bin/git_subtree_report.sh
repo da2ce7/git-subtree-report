@@ -2,20 +2,22 @@
 
 # git_subtree_report.sh - Analyze Git repositories and subtrees without filesystem interaction
 #
-# Version: 1.4.4
+# Version: 1.5.0
 # License: AGPLv3
 # Author: Cameron Garnham <me@da2ce7.com>
 # Repository: https://github.com/da2ce7/git-subtree-report
 #
-# Usage: git_subtree_report.sh [options]
+# Usage: git_subtree_report.sh [OPTIONS...]
 #
 # Options:
-#   -e PATTERN    Exclude files matching the given pattern (ERE)
-#   -r REF        Specify the Git reference to analyze (default: HEAD)
-#   -C DIR        Change to the specified directory before performing operations
-#   -o            Enable output concatenation of safe text files
-#   -t PATH       Specify the relative path to the subtree to analyze
-#   -s SIZE       Set the maximum file size for detailed analysis (e.g., 1M, 500K)
+#   -C, --working-dir <DIR>    Change to directory before running.
+#   -e, --exclude <PATTERN>    Exclude files matching the ERE pattern.
+#   -h, --help                 Display a detailed help message and exit.
+#   -o, --output-concat        Enable concatenated output of safe files.
+#   -r, --ref <REF>            Specify Git reference (commit, branch, tag). Default: HEAD.
+#   -s, --max-size <SIZE>      Set max file size for analysis (e.g., 1M). Default: 1M.
+#   -t, --subtree <PATH>       Relative path of the subdirectory to analyze.
+#       --version              Display version information and exit.
 #
 # Description:
 #   This script provides a detailed analysis of Git repositories and subtrees, supporting
@@ -42,36 +44,51 @@
 ### Strict Mode
 set -Ceuo pipefail
 
-### Global Configuration
-declare -ra UNIX_COMMANDS=(git grep awk tr wc bc numfmt perl sort)
+# ==============================================================================
+# --- Global State & Configuration
+# ==============================================================================
+# This group contains variables for the script's internal constants,
+# environment-dependent settings, and runtime state. These are NOT directly
+# set by user command-line flags.
 
-# Constants set at declaration, inherently read-only with -r
+# --- Script constants and required commands ---
+declare -r VERSION="1.5.0"
+declare -ra UNIX_COMMANDS=(git grep awk tr wc bc numfmt perl sort)
 declare -ri MIN_PERL_MAJOR=5
 declare -ri MIN_PERL_MINOR=10
 declare -ri MIN_BASH_MAJOR=5
 declare -ri MIN_GIT_MAJOR=2
 declare -ri MIN_GIT_MINOR=20
 
-# Color output control
-declare -i color_enabled=0 # Disabled by default, updated in check_utf8_locale
+# --- Environment-dependent state ---
+declare -i color_enabled=0 # Set by `check_utf8_locale` based on tty
 
-declare -i has_working_tree=0        # Repository has a working tree
-declare ref_hash                     # Reference SHA
-declare repo_root                    # Path to git repo root
-declare subdir_rel                   # Relative path to working subtree
-declare working_dir                  # Absolute path after -C resolution
-declare -i exclude_pattern_arg_set=0 # -e flag state
-declare -i context_arg_set=0         # -C flag state
-declare -i git_ref_arg_set=0         # -r flag state
-declare -i subtree_arg_set=0         # -t flag state
+# --- Runtime state variables (populated during setup) ---
+declare -i has_working_tree=0 # Is this a bare or standard repository?
+declare repo_root=""          # Absolute path to the Git repository root
+declare working_dir=""        # Absolute path after -C resolution
+declare ref_hash=""           # The fully resolved commit SHA to be analyzed
+declare subdir_rel=""         # The final, normalized relative path of the subtree
 
-declare -i concatenate_flag=0 # Flag for output concatenation (-o)
+# ==============================================================================
+# --- User-Configurable Options (with defaults)
+# ==============================================================================
+# This group contains variables that are directly set by user-provided command-
+# line arguments. The parser will modify these values.
 
+# --- Argument value holders ---
 declare exclude_pattern_arg=""
 declare git_ref_arg="HEAD"
 declare context_arg="."
 declare subtree_arg="."
 declare -i max_file_size_arg=1048576 # Default 1MiB (1MB)
+
+# --- Argument flags ---
+declare -i concatenate_flag=0         # -o / --output-concat
+declare -i exclude_pattern_arg_set=0  # -e / --exclude
+declare -i git_ref_arg_set=0          # -r / --ref
+declare -i context_arg_set=0          # -C / --working-dir
+declare -i subtree_arg_set=0          # -t / --subtree
 
 ### Centralized Error Handler
 # This script employs a structured error handling system. Its heart is this
@@ -203,56 +220,137 @@ fail_with() {
 	exit "$code"
 }
 
-### Argument Parsing
+# --- Helper functions for argument parsing ---
+display_help_and_exit() {
+    # This function should contain the help text (from the script's header comments)
+    echo "Usage: git-subtree-report [OPTIONS...]"
+    echo "A full-featured Git repository analysis tool."
+    echo ""
+    echo "Options:"
+    echo "  -e, --exclude PATTERN  Exclude files matching the ERE pattern."
+    echo "  -r, --ref REF          Specify Git reference (commit, branch, tag). Default: HEAD."
+    echo "  -C, --working-dir DIR  Change to directory before running."
+    echo "  -t, --subtree PATH     Subtree path to analyze, relative to repo root."
+    echo "  -s, --max-size SIZE    Max file size for analysis (e.g., 1M, 500K). Default: 1M."
+    echo "  -o, --output-concat    Enable concatenated output of safe files."
+    echo "  -h, --help             Display this help message and exit."
+    echo "      --version          Display version information and exit."
+    exit 0
+}
+
+display_version_and_exit() {
+    echo "git-subtree-report version ${VERSION}"
+    exit 0
+}
+
+# --- Refactored Argument Parsing Function ---
 parse_arguments() {
-	while getopts ":e:r:C:ot:s:" opt; do
-		case $opt in
-		e)
-			exclude_pattern_arg_set=1
-			exclude_pattern_arg="$OPTARG"
-			;;
-		r)
-			git_ref_arg_set=1
-			git_ref_arg="$OPTARG"
-			;;
-		C)
-			context_arg_set=1
-			context_arg="$OPTARG"
-			;;
-		o)
-			concatenate_flag=1
-			;;
-		t)
-			subtree_arg_set=1
-			subtree_arg="$OPTARG"
-			# Path validation
-			if [[ "$subtree_arg" = /* ]]; then
-				fail_with 23 "$subtree_arg"
-			fi
-			;;
-		s)
-			if ! max_file_size_arg=$(numfmt --from=iec "$OPTARG"); then
-				fail_with 22 "$OPTARG"
-			fi
-			;;
-		\?)
-			fail_with 20 "$OPTARG"
-			;;
-		:)
-			fail_with 21 "$OPTARG"
-			;;
-		esac
-	done
-	shift $((OPTIND - 1))
+    while [[ $# -gt 0 ]]; do
+        local arg="$1"
+        shift # Consume the argument key now
 
-	# Warn for redundant -C .
-	if ((context_arg_set)) && [[ "$context_arg" == "." ]]; then
-		echo "NOTE: Using default -C . (redundant)" >&2
-	fi
+        case "$arg" in
+            # --- Help and Version ---
+            -h|--help)
+            display_help_and_exit
+            ;;
+            --version)
+            display_version_and_exit
+            ;;
 
-	# Set argument variables to read-only after parsing
-	readonly exclude_pattern_arg_set git_ref_arg_set context_arg_set subtree_arg_set
-	readonly concatenate_flag exclude_pattern_arg git_ref_arg context_arg subtree_arg max_file_size_arg
+            # --- Exclude Pattern ---
+            -e|--exclude)
+            if [[ $# -eq 0 || "$1" == -* ]]; then fail_with 21 "$arg"; fi
+            exclude_pattern_arg="$1"
+            exclude_pattern_arg_set=1
+            shift # Consume value
+            ;;
+            --exclude=*)
+            exclude_pattern_arg="${arg#*=}"
+            exclude_pattern_arg_set=1
+            ;;
+
+            # --- Git Reference ---
+            -r|--ref)
+            if [[ $# -eq 0 || "$1" == -* ]]; then fail_with 21 "$arg"; fi
+            git_ref_arg="$1"
+            git_ref_arg_set=1
+            shift
+            ;;
+            --ref=*)
+            git_ref_arg="${arg#*=}"
+            git_ref_arg_set=1
+            ;;
+
+            # --- Working Directory ---
+            -C|--working-dir)
+            if [[ $# -eq 0 || "$1" == -* ]]; then fail_with 21 "$arg"; fi
+            context_arg="$1"
+            context_arg_set=1
+            shift
+            ;;
+            --working-dir=*)
+            context_arg="${arg#*=}"
+            context_arg_set=1
+            ;;
+
+            # --- Subtree Path ---
+            -t|--subtree)
+            if [[ $# -eq 0 || "$1" == -* ]]; then fail_with 21 "$arg"; fi
+            subtree_arg="$1"
+            if [[ "$subtree_arg" = /* ]]; then fail_with 23 "$subtree_arg"; fi
+            subtree_arg_set=1
+            shift
+            ;;
+            --subtree=*)
+            subtree_arg="${arg#*=}"
+            if [[ "$subtree_arg" = /* ]]; then fail_with 23 "$subtree_arg"; fi
+            subtree_arg_set=1
+            ;;
+
+            # --- Max File Size ---
+            -s|--max-size)
+            if [[ $# -eq 0 || "$1" == -* ]]; then fail_with 21 "$arg"; fi
+            if ! max_file_size_arg=$(numfmt --from=iec "$1"); then fail_with 22 "$1"; fi
+            shift
+            ;;
+            --max-size=*)
+            local size_val="${arg#*=}"
+            if ! max_file_size_arg=$(numfmt --from=iec "$size_val"); then fail_with 22 "$size_val"; fi
+            ;;
+
+            # --- Concatenation Flag (Boolean) ---
+            -o|--output-concat)
+            concatenate_flag=1
+            ;;
+
+            # --- Standard option handling ---
+            --)
+            # All subsequent arguments are positional (none in this script)
+            break
+            ;;
+            -*)
+            # Handles unknown options like -z or --unknown-flag
+            fail_with 20 "$arg"
+            ;;
+            *)
+            # Handles positional arguments. This script doesn't have any,
+            # so treat them as an error.
+            echo "ERROR: Unexpected positional argument '$arg'." >&2
+            fail_with 20 "$arg"
+            ;;
+        esac
+    done
+
+    # Preserve any post-parsing logic from the original script
+    if ((context_arg_set)) && [[ "$context_arg" == "." ]]; then
+        echo "NOTE: Using default '-C .' is redundant." >&2
+    fi
+
+    # FINALIZATION: Make variables read-only to prevent modification
+    # This is a critical security and stability practice from the original script.
+    readonly exclude_pattern_arg git_ref_arg context_arg subtree_arg max_file_size_arg concatenate_flag
+    readonly exclude_pattern_arg_set git_ref_arg_set context_arg_set subtree_arg_set
 }
 
 ### Core Environment Setup

@@ -1,6 +1,6 @@
 project(
     'git-subtree-report',
-    version: '1.4.2',
+    version: '1.4.3',
     license: 'AGPL-3.0',
     meson_version: '>=0.56.0',
     default_options: [

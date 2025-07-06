@@ -2,32 +2,32 @@ Initializing working context: .
 Work tree detected
 Resolved repo root: /var/home/cameron/dev/git-subtree-report
 Resolving commit: HEAD
-Resolved commit: 68abc227
+Resolved commit: ac4cdbdf
 Initialized workspace:
   ├─ Repo root:  /var/home/cameron/dev/git-subtree-report
   ├─ Working dir: /var/home/cameron/dev/git-subtree-report
   ├─ Subtree:    ./.
   └─ Exclusion Filter:  '<none>'  (ERE)
 Processing entire repository tree
-Collecting file metadata... found 11 files
+Collecting file metadata... found 14 files
 Calculating blob sizes...
 Applying exclusion pattern...
 Human formatting blob sizes...
 done
-  ◼ Included files: 11
+  ◼ Included files: 14
   ◼ Excluded files: 0
-  ◼ Total modes captured: 11
-  ◼ Total unique blobs: 11
-Processing 11 files:
+  ◼ Total modes captured: 14
+  ◼ Total unique blobs: 14
+Processing 14 files:
 Detecting submodules... done (0 found)
 Detecting symlinks... done (0 found)
 Scanning Git attributes... completed
 Analyzing content safety... done
-Processed 11 file blobs:
-  ◼ Contained null bytes:  0
+Processed 14 file blobs:
+  ◼ Contained null bytes:  1
   ◼ Contained invalid UTF8:  0
   ◼ Non-printable/binary:  0
-  ◼ Safe text blobs: 11 blobs
-add_file_analysis completed in 0.064 seconds
+  ◼ Safe text blobs: 13 blobs
+add_file_analysis completed in 0.073 seconds
 
-  Processed 11 of 11 files in 1s.
+  Processed 14 of 14 files in 1s.

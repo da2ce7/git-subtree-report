@@ -2,113 +2,115 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.4.3] - 2025-07-06
+
+### Changed
+
+-   Refined the language and improved the clarity of all historical entries in the `CHANGELOG.md` file for better readability and historical accuracy.
 
 ## [1.4.2] - 2025-07-06
 
 ### Added
 
--   Desktop integration files, including AppStream metadata (`.metainfo.xml`) and a `.desktop` entry. This allows the application to be discoverable and displayed correctly in Linux software centers and application menus.
+-   Desktop integration files, including AppStream metadata (`.metainfo.xml`) and a `.desktop` entry, allowing the application to be discoverable in Linux software centers and application menus.
 
+### Changed
+
+-   The Meson build system was updated to install the new desktop integration files to their standard system locations.
 
 ## [1.4.1] - 2025-07-05
 
 ### Fixed
 
--   Corrected all documentation and report outputs to accurately state that the exclusion filter (`-e`) uses Extended Regular Expressions (ERE), not Perl-compatible regex. This aligns the documentation with the actual behavior of Bash's `[[ =~ ... ]]` operator.
-
+-   Corrected all documentation (`man` page, `README.md`) and report output to accurately state that the `-e` exclusion filter uses Extended Regular Expressions (ERE) and not Perl-compatible regex, aligning the documentation with the actual behavior of Bash's `[[ =~ ... ]]` operator.
 
 ## [1.4.0] - 2025-07-05
 
 ### Added
 
--   **Structured Error Handling:** Implemented a new, centralized error handling system. All script failures now produce a detailed three-part message: a machine-parsable error code, a description of the situation, and actionable advice on how to resolve the issue.
+-   A new, centralized error handling system (`fail_with`) that provides structured, three-part error messages: a machine-parsable error code, a description of the situation, and actionable advice on how to resolve the issue.
 
 ### Changed
 
--   Replaced all ad-hoc `exit` calls and error traps with the new `fail_with` function for consistent, maintainable, and highly user-friendly error reporting. The script's exit logic was also overhauled for more robust `SIGPIPE` handling.
-
+-   Replaced all ad-hoc `exit` calls and `trap` commands with the new centralized system for consistent, maintainable, and user-friendly error reporting.
+-   Improved `SIGPIPE` handling to provide clearer feedback when output is piped to a command like `head`.
 
 ## [1.3.0] - 2025-07-05
 
 ### Security
 
--   Hardened the script against potential Time-of-Check, Time-of-Use (TOCTOU) race conditions by adding a new security check. The script now verifies that no component of the path provided via the `-C` argument is a symbolic link before changing directories. This prevents the possibility of directory paths being maliciously swapped during script execution.
-
+-   Hardened the script against potential Time-of-Check, Time-of-Use (TOCTOU) race conditions. The script now verifies that no component of the path provided via the `-C` argument is a symbolic link before changing directories, preventing malicious path swapping during execution.
 
 ## [1.2.0] - 2025-07-04
 
 ### Added
 
--   **Exclusion Transparency:** The report now lists the full path and size of each file matched by an exclusion pattern, providing complete clarity on what was filtered.
+-   The report's "Exclusion Details" section now provides full transparency by listing the path and size of every file filtered by an exclusion pattern.
 
 ### Changed
 
--   **Report Statistics:** File category counts are now presented with percentages, offering a clearer at-a-glance analysis of repository composition.
--   **Report Clarity:** Improved output labels (e.g., "Total size (included files)") and more consistent formatting for zero-value sizes to remove ambiguity.
-
+-   Report statistics (e.g., file category counts) are now presented with percentages for a clearer at-a-glance analysis of repository composition.
+-   Improved the clarity of report labels (e.g., "Total size (included files)") and standardized the formatting of zero-value sizes to remove ambiguity.
 
 ## [1.1.1] - 2025-04-18
 
 ### Changed
 
--   Greatly improved the installation instructions in `README.md` by using the standard `install` command, providing platform-specific guidance, and clarifying the Meson workflow.
-
+-   Overhauled the installation instructions in `README.md` to use the standard `install` command, provide platform-specific guidance for Linux and Windows, and clarify the Meson build workflow.
 
 ## [1.1.0] - 2025-04-18
 
 ### Changed
 
--   **Core Analysis Engine:** Refactored the internal data model from being path-centric to blob-centric. This significantly improves performance on repositories with duplicate files by ensuring that each unique file content (blob) is analyzed only once.
--   **Internal State Management:** Variable names have been updated to clearly distinguish between path-based properties (e.g., `path_is_symlink`) and content-based properties (e.g., `blob_is_safe`), improving code clarity and maintainability.
-
+-   Refactored the core analysis engine to be "blob-centric" instead of "path-centric," significantly improving performance on repositories with duplicate file content by analyzing each unique blob only once.
+-   Improved code clarity and maintainability by evolving the internal data model to distinguish between path-based properties (e.g., `path_is_symlink`) and content-based properties (e.g., `blob_is_safe`).
 
 ## [1.0.2] - 2025-04-17
 
 ### Added
 
--   **Documentation:** A comprehensive `man(1)` page for `git-subtree-report`, providing integrated, offline help in the command-line environment.
+-   A comprehensive `man(1)` page providing integrated, offline help, bringing the tool in line with standard UNIX command-line utilities.
 
 ### Changed
 
--   **Build System:** The `meson.build` file was updated to handle the installation and packaging of the new man page.
-
+-   Updated the Meson build system to handle the installation and packaging of the new man page.
 
 ## [1.0.1] - 2025-04-17
 
 ### Added
 
--   **Meson Build System:**
-    -   Introduced `meson.build` for standardized installation and packaging.
-    -   Added programmatic dependency checks for `bash`, `git`, `perl`, and `numfmt` to ensure a stable environment.
-    -   Handles installation of the main script and documentation to standard system paths (`bindir`, `datadir`).
--   **Example Outputs:**
-    -   Added `repo_commit.txt` and `repo_commit.log` as concrete examples of the tool's output.
+-   A `meson.build` file to provide a standardized, dependency-aware method for installing the script and its documentation.
+-   Concrete example output files (`repo_commit.txt`, `repo_commit.log`) to the repository for user reference.
 
 ### Changed
 
--   **README.md:** Updated with new installation instructions for Meson and a reproducible example section.
--   **.gitignore:** Updated to ignore Meson build artifacts while explicitly including the new example log file.
--   **Project Version:** Bumped version to `1.0.1` in all relevant files.
-
+-   Updated `README.md` with instructions for the new Meson build system.
 
 ## [1.0.0] - 2025-04-17
 
 ### Added
 
--   **Core Analysis Engine (`git_subtree_report.sh`):**
-    -   Initial implementation for Git tree parsing and file analysis without checkout.
-    -   Content safety validation system checking for null bytes, invalid UTF-8, and non-printable characters.
-    -   Support for bare and standard repositories.
-    -   CLI options for specifying target directory (`-C`), subtree (`-t`), Git reference (`-r`), and exclusion patterns (`-e`).
-    -   Concatenation output mode (`-o`) for safe files.
--   **Documentation:**
-    -   Comprehensive `README.md` with features, installation instructions, usage examples, and technical details.
-    -   `LICENSE.md` file containing the GNU Affero General Public License v3.0.
-    -   Example output for a repository with zero commits.
--   **Project Structure & Tooling:**
-    -   Basic repository layout (`src/`, `examples/`).
-    -   `.gitignore` for common OS, editor, and dependency files.
-    -   `cSpell.json` for project-specific spelling dictionary.
+-   Initial release of `git-subtree-report`.
+-   Core functionality for Git tree parsing and file analysis without checkout.
+-   Content safety validation system for null bytes, invalid UTF-8, and non-printable characters.
+-   Support for submodules, symbolic links, and LFS pointers.
+-   Command-line options for specifying repository, subtree, commit reference, and exclusion patterns.
+-   Concatenation output mode (`-o`).
+-   Comprehensive `README.md`, `LICENSE.md`, and project scaffolding.
+
+[Unreleased]: https://github.com/da2ce7/git-subtree-report/compare/v1.4.2...HEAD
+[1.4.2]: https://github.com/da2ce7/git-subtree-report/compare/v1.4.1...v1.4.2
+[1.4.1]: https://github.com/da2ce7/git-subtree-report/compare/v1.4.0...v1.4.1
+[1.4.0]: https://github.com/da2ce7/git-subtree-report/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/da2ce7/git-subtree-report/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/da2ce7/git-subtree-report/compare/v1.1.1...v1.2.0
+[1.1.1]: https://github.com/da2ce7/git-subtree-report/compare/v1.1.0...v1.1.1
+[1.1.0]: https://github.com/da2ce7/git-subtree-report/compare/v1.0.2...v1.1.0
+[1.0.2]: https://github.com/da2ce7/git-subtree-report/compare/v1.0.1...v1.0.2
+[1.0.1]: https://github.com/da2ce7/git-subtree-report/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/da2ce7/git-subtree-report/releases/tag/v1.0.0

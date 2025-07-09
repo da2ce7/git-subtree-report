@@ -1,4 +1,4 @@
-# 🔍 Git Subtree Analyzer & Reporter [![Version 1.5.0](https://img.shields.io/badge/version-1.5.0-blue)](LICENSE.md) [![AGPLv3 License](https://img.shields.io/badge/license-AGPLv3-green)](LICENSE.md)
+# 🔍 Git Subtree Analyzer & Reporter [![Version 1.6.0](https://img.shields.io/badge/version-1.6.0-blue)](LICENSE.md) [![AGPLv3 License](https://img.shields.io/badge/license-AGPLv3-green)](LICENSE.md)
 
 **Zero-Footprint Git Repository Analysis Tool**
 *See into your repository's soul without checking out files!*
@@ -17,6 +17,7 @@
 ## 🚀 Features
 
 ✨ **Powerful Insights in Your Terminal**
+✔️ Two-stage filtering (include then exclude)
 ✔️ Full repository/subtree visualization
 ✔️ Concatenation safety checks (null bytes, invalid UTF-8)
 ✔️ Size analysis with LFS tracking
@@ -75,26 +76,37 @@ meson dist -C build --formats gztar
 
 ### Command Options
 
-| Option                    | Description                                                  | Default                 |
-|---------------------------|--------------------------------------------------------------|-------------------------|
-| `-C, --working-dir <DIR>` | Change to directory `<DIR>` before running analysis.         | `.` (current directory) |
-| `-e, --exclude <PATTERN>` | Exclude files matching an Extended Regular Expression.       | (none)                  |
-| `-h, --help`              | Display a detailed help message and exit.                    | (N/A)                   |
-| `-o, --output-concat`     | Enable concatenated output of all safe text files.           | Disabled                |
-| `-r, --ref <REF>`         | Git reference (commit, branch, tag) to analyze.              | `HEAD`                  |
-| `-s, --max-size <SIZE>`   | Set max file size for content analysis (e.g., `1M`, `500K`). | `1M`                    |
-| `-t, --subtree <PATH>`    | Relative path of the subdirectory to analyze.                | `.` (from within repo)  |
-| `--version`               | Display version information and exit.                        | (N/A)                   |
+| Option                    | Description                                                              | Default                 |
+|---------------------------|--------------------------------------------------------------------------|-------------------------|
+| `-C, --working-dir <DIR>` | Change to directory `<DIR>` before running analysis.                     | `.` (current directory) |
+| `-i, --include <PATTERN>` | Only include files matching an ERE (allow-list). Applied before exclude. | (none)                  |
+| `-e, --exclude <PATTERN>` | Exclude files from the included set matching an ERE (block-list).        | (none)                  |
+| `-h, --help`              | Display a detailed help message and exit.                                | (N/A)                   |
+| `-o, --output-concat`     | Enable concatenated output of all safe text files.                       | Disabled                |
+| `-r, --ref <REF>`         | Git reference (commit, branch, tag) to analyze.                          | `HEAD`                  |
+| `-s, --max-size <SIZE>`   | Set max file size for content analysis (e.g., `1M`, `500K`).             | `1M`                    |
+| `-t, --subtree <PATH>`    | Relative path of the subdirectory to analyze.                            | `.` (from within repo)  |
+| `--version`               | Display version information and exit.                                    | (N/A)                   |
 
+### Filtering Logic
+
+The script applies filters in a two-stage process for powerful and precise file selection:
+
+1.  **Inclusion (`--include`)**: First, an "allow-list" is created. If `--include` is used, only files matching the pattern are kept. If it's not used, all files in the subtree are kept.
+2.  **Exclusion (`--exclude`)**: Next, the `--exclude` pattern is run against the results of the inclusion stage. Any files from that set matching the exclusion pattern are removed.
+
+`All Files in Subtree` → `[--include Filter]` → `Intermediate Set` → `[--exclude Filter]` → `Final Set for Analysis`
 
 ### Basic Example
 ```bash
-./git_subtree_report.sh -C my-repo -t src/ -e 'test_' -s 5M
+# Analyzes the 'src/' directory, first including only C/C++ source files,
+# then excluding any of those that are in a 'test/' subdirectory.
+git-subtree-report-1 -t src/ -i '\.(c|cpp|h)$' -e '/test/'
 ```
 
 ### Advanced Usage
 ```bash
-# Analyze last month's commits in CI/CD pipeline
+# Analyze last month's commits in CI/CD pipeline, excluding secrets
 git-subtree-report-1 -C "${BUILD_DIR}" \
   -r "$(git rev-list -n1 --since='1 month ago')" \
   -t infrastructure/ \
@@ -108,8 +120,10 @@ git-subtree-report-1 -C "${BUILD_DIR}" \
 ```bash
 $ git-subtree-report-1 1> examples/repo_commit.txt 2> examples/repo_commit.log
 ```
-[Repo Commit Report](https://github.com/da2ce7/git-subtree-report/examples/repo_commit.txt)
-[Repo Commit Log](https://github.com/da2ce7/git-subtree-report/examples/repo_commit.log)
+[Repo Commit Report](https://github.com/da2ce7/git-subtree-report/blob/main/examples/repo_commit.txt)
+[Repo Commit Log](https://github.com/da2ce7/git-subtree-report/blob/main/examples/repo_commit.log)
+
+*Note: As of v1.6.0, the report includes a detailed **`NAME-BASED FILTERING REPORT`** section that breaks down which files were selected or rejected by the `--include` and `--exclude` filters.*
 
 ### Concatenation Mode
 ```bash
@@ -150,7 +164,11 @@ Outputs clean concatenation of all safe text files with visual separators
 ```mermaid
 graph TD
     A[CLI Arguments] --> B[Git Object Analysis]
-    B --> C[File Classification Engine]
+    B --> C{Filtering Engine}
+    subgraph C [Filtering Engine]
+      direction LR
+      C1[--include / allow-list] --> C2[--exclude / block-list]
+    end
     C --> D[Safety Validation Pipeline]
     D --> E[Report Generation]
     E --> F[Terminal/File Output]

@@ -1,6 +1,6 @@
 .\" Manpage for git-subtree-report-1
 .\" SPDX-License-Identifier: AGPL-3.0
-.Dd July 06, 2025
+.Dd July 09, 2025
 .Dt GIT-SUBTREE-REPORT 1
 .Os
 .Sh NAME
@@ -11,6 +11,7 @@
 .Op Fl C Ar dir | Fl -working-dir=dir
 .Op Fl e Ar pattern | Fl -exclude=pattern
 .Op Fl h | Fl -help
+.Op Fl i Ar pattern | Fl -include=pattern
 .Op Fl o | Fl -output-concat
 .Op Fl r Ar ref | Fl -ref=ref
 .Op Fl s Ar size | Fl -max-size=size
@@ -22,24 +23,31 @@ The
 utility performs deep analysis of Git repository subtrees to determine file safety for concatenation outputs. It operates directly on the Git object database without requiring a checkout. Key features include:
 .Bl -bullet -offset indent
 .It
-Full tree visualization with exclusion patterns
+Full tree visualization with a two-stage filtering system.
 .It
-Multi-level safety checks (binary detection, encoding validation)
+Multi-level safety checks (binary detection, encoding validation).
 .It
-Integration with Git LFS and submodules
+Integration with Git LFS and submodules.
 .It
-Historical analysis at any commit reference
+Historical analysis at any commit reference.
 .El
+.Pp
+Filters are applied in a sequence: first, the
+.Fl i
+(include) pattern creates an allow-list. Then, the
+.Fl e
+(exclude) pattern removes items from that list.
 .Sh OPTIONS
 The options are as follows:
 .Bl -tag -width "--output-concat"
 .It Fl C Ar dir , Fl -working-dir=dir
 Change working directory before analysis. This is essential for operating on bare repositories.
 .It Fl e Ar pattern , Fl -exclude=pattern
-Exclude paths matching a given extended regular expression (ERE). The pattern is matched against the full path relative to the repository root (e.g.,
-.Ql src/components/main.js ) .
+Exclude paths from the included set that match a given Extended Regular Expression (ERE). This block-list is applied *after* the include filter.
 .It Fl h , Fl -help
 Display the help message with all options and exit.
+.It Fl i Ar pattern , Fl -include=pattern
+Only include files matching a given ERE. This allow-list is applied first, before any exclusion patterns. If not provided, all files in the subtree are included by default.
 .It Fl o , Fl -output-concat
 Enable concatenation output mode. Instead of the summary report, this will print the content of all safe, concatenatable files to standard output, separated by headers.
 .It Fl r Ar ref , Fl -ref=ref
@@ -59,7 +67,7 @@ Overrides locale settings. The script requires a UTF-8 compatible locale, such a
 .Ql C.UTF-8 ,
 to be available for correct text processing.
 .It Ev NO_COLOR
-If this variable is set to any value, colored output in the terminal a disabled.
+If this variable is set to any value, colored output in the terminal is disabled.
 .El
 .Sh FILES
 .Bl -tag -width Ds
@@ -67,10 +75,10 @@ If this variable is set to any value, colored output in the terminal a disabled.
 Typical installation path for the executable.
 .El
 .Sh EXAMPLES
-Analyze the
+Analyze only C/C++ source files in the
 .Ql src/
-directory in a CI environment, excluding CSV files and setting a 2MB size limit:
-.Dl $ git-subtree-report-1 -C /build/repo -t src/ -e '\.csv$' -s 2M
+directory, while excluding any from test subdirectories:
+.Dl $ git-subtree-report-1 -t src/ -i '\\.(c|h)$' -e '/test/'
 .Pp
 Generate a concatenated output for all text files in the
 .Ql docs/
@@ -81,7 +89,7 @@ Analyze project state from 3 months ago:
 .Dl $ git-subtree-report-1 -r $(git rev-list -n1 --until="3 months ago" main)
 .Pp
 Perform a security audit using long options for clarity:
-.Dl $ git-subtree-report-1 --working-dir /srv/app --subtree api/ --exclude '\.secret(s)?$' --output-concat > api_audit.txt
+.Dl $ git-subtree-report-1 --working-dir /srv/app --subtree api/ --exclude '\\.secret(s)?$' --output-concat > api_audit.txt
 .Sh SEE ALSO
 .Xr git 1 ,
 .Xr perl 1 ,

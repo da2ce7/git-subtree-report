@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2025-07-09
+
+### Added
+
+-   **Two-Stage Filtering:** Added a new `--include` (`-i`) option to specify an "allow-list" of files using an ERE pattern. This enables much more powerful and precise file selection.
+
+### Changed
+
+-   **Filtering Pipeline Overhaul:** The core filtering logic was refactored into a sequential, two-stage process. The `--include` filter is now applied first to create an initial set, and the `--exclude` filter is then applied to that set.
+-   **Transparent Reporting:** The report output has been significantly enhanced with a new **`NAME-BASED FILTERING REPORT`** section. This gives users a clear, explicit breakdown of which files were selected or rejected by the `--include` and `--exclude` filters.
+-   **Internal State Management:** Replaced the simple `path_is_included` model with a more robust "three-bucket" system (`path_is_rejected_by_include`, `path_is_rejected_by_exclude`, `path_is_selected_for_analysis`), improving code clarity and maintainability.
+
+### Fixed
+
+-   **Concatenation Safety:** Hardened the logic for identifying concatenatable files to ensure that special file types (symlinks, submodules, LFS pointers) are never included in the concatenation output, even if their blob content would otherwise pass safety checks.
+
 ## [1.5.0] - 2025-07-06
 
 ### Added
@@ -126,7 +142,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Concatenation output mode (`-o`).
 -   Comprehensive `README.md`, `LICENSE.md`, and project scaffolding.
 
-[Unreleased]: https://github.com/da2ce7/git-subtree-report/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/da2ce7/git-subtree-report/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/da2ce7/git-subtree-report/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/da2ce7/git-subtree-report/compare/v1.4.4...v1.5.0
 [1.4.4]: https://github.com/da2ce7/git-subtree-report/compare/v1.4.3...v1.4.4
 [1.4.3]: https://github.com/da2ce7/git-subtree-report/compare/v1.4.2...v1.4.3

@@ -49,3 +49,4 @@ temp/
 *.swp
 *report.txt*
 *report.diff*
+*report.commit*

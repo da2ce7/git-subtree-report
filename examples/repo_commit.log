@@ -2,32 +2,32 @@ Initializing working context: .
 Work tree detected
 Resolved repo root: /var/home/cameron/dev/git-subtree-report
 Resolving commit: HEAD
-Resolved commit: c8e6b3b9
+Resolved commit: 0decfe43
 Initialized workspace:
   ├─ Repo root:  /var/home/cameron/dev/git-subtree-report
   ├─ Working dir: /var/home/cameron/dev/git-subtree-report
   ├─ Subtree:    ./.
+  ├─ Inclusion Filter:  '<none>'  (ERE)
   └─ Exclusion Filter:  '<none>'  (ERE)
 Processing entire repository tree
-Collecting file metadata... found 14 files
-Calculating blob sizes...
-Applying exclusion pattern...
-Human formatting blob sizes...
-done
-  ◼ Included files: 14
-  ◼ Excluded files: 0
-  ◼ Total modes captured: 14
-  ◼ Total unique blobs: 14
-Processing 14 files:
-Detecting submodules... done (0 found)
-Detecting symlinks... done (0 found)
-Scanning Git attributes... completed
-Analyzing content safety... done
-Processed 14 file blobs:
-  ◼ Contained null bytes:  1
-  ◼ Contained invalid UTF8:  0
-  ◼ Non-printable/binary:  0
-  ◼ Safe text blobs: 13 blobs
-add_file_analysis completed in 0.073 seconds
+Collecting file metadata from subtree... found 14 files.
+Calculating blob sizes... done.
+Applying name filters... done.
+Filtering summary:
+  ◼ Initial candidates:            14
+  ◼ Rejected by --include filter:  0
+  ◼ Rejected by --exclude filter:  0
+  ◼ Selected for analysis:         14
+Processing 14 selected files:
+Detecting submodules in subtree... done (0 found).
+Detecting symlinks in subtree... done (0 found).
+Scanning Git attributes for selected files... completed.
+Analyzing content safety for candidate blobs... done (14 blobs).
+Content analysis summary:
+  ◼ Blobs oversized:      0
+  ◼ Blobs with nulls:     1
+  ◼ Blobs with invalid UTF8: 0
+  ◼ Blobs with non-print: 0
+  ◼ Blobs safe for concat:  13
 
-  Processed 14 of 14 files in 1s.
+  Analyzed content of 14 files (from 14 total in subtree) in 0s.

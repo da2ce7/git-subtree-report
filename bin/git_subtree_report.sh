@@ -2,7 +2,7 @@
 
 # git_subtree_report.sh - Analyze Git repositories and subtrees without filesystem interaction
 #
-# Version: 1.5.0
+# Version: 1.6.0
 # License: AGPLv3
 # Author: Cameron Garnham <me@da2ce7.com>
 # Repository: https://github.com/da2ce7/git-subtree-report
@@ -11,6 +11,7 @@
 #
 # Options:
 #   -C, --working-dir <DIR>    Change to directory before running.
+#   -i, --include <PATTERN>    Only include files matching the ERE pattern.
 #   -e, --exclude <PATTERN>    Exclude files matching the ERE pattern.
 #   -h, --help                 Display a detailed help message and exit.
 #   -o, --output-concat        Enable concatenated output of safe files.
@@ -21,8 +22,8 @@
 #
 # Description:
 #   This script provides a detailed analysis of Git repositories and subtrees, supporting
-#   both standard and bare repositories. It generates a report on file types, sizes, and
-#   safety for concatenation, among other metrics.
+#   both standard and bare repositories. The filtering pipeline first applies the --include
+#   filter (if provided), and then applies the --exclude filter to the result.
 #
 # Requirements:
 #   - Bash 5.0 or later
@@ -31,11 +32,10 @@
 #   - C.UTF-8 locale must be available
 #
 # Example:
-#   git_subtree_report.sh -C /path/to/repo -t sub/dir -e '\.log$' -s 10M
+#   git_subtree_report.sh -C /path/to/repo -t src -i '\.(c|h)$' -e 'test/'
 #
-#   This analyzes the 'sub/dir' subtree in the repository at '/path/to/repo',
-#   excluding files ending with '.log', and only performs detailed analysis on files
-#   smaller than 10 megabytes.
+#   This analyzes the 'src' subtree, first including only files ending in .c or .h,
+#   and then excluding any of those results that are in a 'test/' directory.
 
 ###########################################
 #### 1. Initialization & Environment Setup
@@ -52,7 +52,7 @@ set -Ceuo pipefail
 # set by user command-line flags.
 
 # --- Script constants and required commands ---
-declare -r VERSION="1.5.0"
+declare -r VERSION="1.6.0"
 declare -ra UNIX_COMMANDS=(git grep awk tr wc bc numfmt perl sort)
 declare -ri MIN_PERL_MAJOR=5
 declare -ri MIN_PERL_MINOR=10
@@ -77,6 +77,7 @@ declare subdir_rel=""         # The final, normalized relative path of the subtr
 # line arguments. The parser will modify these values.
 
 # --- Argument value holders ---
+declare include_pattern_arg=""
 declare exclude_pattern_arg=""
 declare git_ref_arg="HEAD"
 declare context_arg="."
@@ -85,6 +86,7 @@ declare -i max_file_size_arg=1048576 # Default 1MiB (1MB)
 
 # --- Argument flags ---
 declare -i concatenate_flag=0        # -o / --output-concat
+declare -i include_pattern_arg_set=0 # -i / --include
 declare -i exclude_pattern_arg_set=0 # -e / --exclude
 declare -i git_ref_arg_set=0         # -r / --ref
 declare -i context_arg_set=0         # -C / --working-dir
@@ -227,7 +229,8 @@ display_help_and_exit() {
 	echo "A full-featured Git repository analysis tool."
 	echo ""
 	echo "Options:"
-	echo "  -e, --exclude PATTERN  Exclude files matching the ERE pattern."
+	echo "  -i, --include PATTERN  Only include files that match the ERE pattern (allow-list)."
+	echo "  -e, --exclude PATTERN  Exclude files from the included set that match the ERE pattern (block-list)."
 	echo "  -r, --ref REF          Specify Git reference (commit, branch, tag). Default: HEAD."
 	echo "  -C, --working-dir DIR  Change to directory before running."
 	echo "  -t, --subtree PATH     Subtree path to analyze, relative to repo root."
@@ -256,6 +259,18 @@ parse_arguments() {
 			;;
 		--version)
 			display_version_and_exit
+			;;
+
+		# --- Include Pattern ---
+		-i | --include)
+			if [[ $# -eq 0 || "$1" == -* ]]; then fail_with 21 "$arg"; fi
+			include_pattern_arg="$1"
+			include_pattern_arg_set=1
+			shift # Consume value
+			;;
+		--include=*)
+			include_pattern_arg="${arg#*=}"
+			include_pattern_arg_set=1
 			;;
 
 		# --- Exclude Pattern ---
@@ -349,8 +364,8 @@ parse_arguments() {
 
 	# FINALIZATION: Make variables read-only to prevent modification
 	# This is a critical security and stability practice from the original script.
-	readonly exclude_pattern_arg git_ref_arg context_arg subtree_arg max_file_size_arg concatenate_flag
-	readonly exclude_pattern_arg_set git_ref_arg_set context_arg_set subtree_arg_set
+	readonly include_pattern_arg exclude_pattern_arg git_ref_arg context_arg subtree_arg max_file_size_arg concatenate_flag
+	readonly include_pattern_arg_set exclude_pattern_arg_set git_ref_arg_set context_arg_set subtree_arg_set
 }
 
 ### Core Environment Setup
@@ -387,6 +402,7 @@ setup_environment() {
 	echo "  ├─ Repo root:  $repo_root" >&2
 	echo "  ├─ Working dir: $working_dir" >&2
 	echo "  ├─ Subtree:    ./$subdir_rel" >&2
+	echo "  ├─ Inclusion Filter:  '${include_pattern_arg:-<none>}'  (ERE)" >&2
 	echo "  └─ Exclusion Filter:  '${exclude_pattern_arg:-<none>}'  (ERE)" >&2
 }
 
@@ -632,24 +648,22 @@ get_tree_hashes() {
 	readonly sub_tree_hash # Final value assigned
 }
 
-### File Discovery & Filtering
+### File Inventory & Filtering Pipeline
 
-# Path → metadata/status mappings
-declare -A path_is_excluded=() # [rel_path] → 1 (filtered by exclusion pattern)
-declare -A path_is_included=() # [rel_path] → 1 (passed all filters)
+# Foundational data maps (populated once)
+declare -A path_to_blob=()        # [rel_path] -> blob SHA
+declare -A path_to_mode=()        # [rel_path] -> file mode (e.g. 100644)
+declare -A blob_to_size=()        # [blob] -> raw byte count
+declare -A blob_to_size_pretty=() # [blob] -> human-readable size
 
-# Path → value mappings
-declare -A path_to_blob=() # [rel_path] → blob SHA
-declare -A path_to_mode=() # [rel_path] → file mode (e.g. 100644)
+# The "Three Buckets" for categorized paths
+declare -A path_is_rejected_by_include=()
+declare -A path_is_rejected_by_exclude=()
+declare -A path_is_selected_for_analysis=()
 
-# Blob → value mappings
-declare -A blob_to_size=()        # [blob] → raw byte count
-declare -A blob_to_size_pretty=() # [blob] → human-readable size
-
-collect_path_is_included() {
-	echo -n "Collecting file metadata... " >&2
-
-	# Step 1: Collect modes and hashes from ls-tree
+hydrate_file_inventory_and_filter() {
+	# --- Stage 1: Hydrate Foundational Data ---
+	echo -n "Collecting file metadata from subtree... " >&2
 	local entry
 	while IFS= read -r -d '' entry; do
 		IFS=' ' read -r mode type sha _ <<<"${entry%%$'\t'*}"
@@ -660,106 +674,122 @@ collect_path_is_included() {
 		fi
 	done < <(git -C "$repo_root" ls-tree -r -z "$sub_tree_hash")
 
-	local -i original_subtree_files_count=${#path_to_blob[@]}
-	echo "found $original_subtree_files_count files" >&2
+	local -i initial_candidate_count=${#path_to_blob[@]}
+	echo "found $initial_candidate_count files." >&2
 
-	# Validate that modes were captured for all blobs
-	if [[ ${#path_to_mode[@]} -ne $original_subtree_files_count ]]; then
-		fail_with 41 "Mismatch in file modes captured (${#path_to_mode[@]}) vs. blobs ($original_subtree_files_count)."
+	if [[ ${#path_to_mode[@]} -ne $initial_candidate_count ]]; then
+		fail_with 41 "Mismatch in file modes captured (${#path_to_mode[@]}) vs. blobs ($initial_candidate_count)."
 	fi
-	readonly -A path_to_blob path_to_mode # Fully populated
+	readonly -A path_to_blob path_to_mode
 
-	# Step 2: Collect blob sizes using cat-file --batch-check
-	echo "Calculating blob sizes..." >&2
-
-	# Get unique SHAs from path_to_blob
+	echo -n "Calculating blob sizes... " >&2
 	local -a unique_shas
 	mapfile -t unique_shas < <(printf '%s\n' "${path_to_blob[@]}" | sort -u)
-	readonly -a unique_shas # Populated and no longer modified
+	readonly -a unique_shas
 
-	# Collect sizes for each SHA
 	while IFS=' ' read -r blob size type; do
 		if [[ "$type" == "blob" && "$size" =~ ^[0-9]+$ ]]; then
 			blob_to_size["$blob"]=$size
 		else
 			echo "WARNING: Could not process blob $blob (type: $type, size: $size)" >&2
 		fi
-	done < <(
-		printf "%s\n" "${unique_shas[@]}" |
-			git -C "$repo_root" cat-file --batch-check='%(objectname) %(objectsize) %(objecttype)' 2>/dev/null
-	)
-	readonly -A blob_to_size # Fully populated
+	done < <(printf "%s\n" "${unique_shas[@]}" | git -C "$repo_root" cat-file --batch-check='%(objectname) %(objectsize) %(objecttype)' 2>/dev/null)
 
-	# Validate that sizes were captured for all unique blobs
 	for sha in "${unique_shas[@]}"; do
-		if [[ ! -v blob_to_size["$sha"] ]]; then
-			fail_with 41 "No size found for blob $sha."
-		fi
+		[[ -v "blob_to_size[$sha]" ]] || blob_to_size["$sha"]=0
 	done
+	readonly -A blob_to_size
 
-	# Step 3: Apply exclusion pattern
-	echo "Applying exclusion pattern..." >&2
-	if ((exclude_pattern_arg_set)); then
-		for rel_path in "${!path_to_blob[@]}"; do
-			local repo_rel_path="${subdir_rel%/}/${rel_path}"
-			[[ "$subdir_rel" == "." ]] && repo_rel_path="$rel_path"
-			if [[ "$repo_rel_path" =~ $exclude_pattern_arg ]]; then
-				path_is_excluded["$rel_path"]=1
-			else
-				path_is_included["$rel_path"]=1
-			fi
-		done
-		if [[ ${#path_is_included[@]} -eq 0 ]] && [[ ${#path_is_excluded[@]} -ne 0 ]]; then
-			echo "All files excluded by pattern '$exclude_pattern_arg'" >&2
-			exit 0
-		fi
-	else
-		for rel_path in "${!path_to_blob[@]}"; do
-			path_is_included["$rel_path"]=1
-		done
-	fi
-	readonly -A path_is_excluded # Fully populated
-
-	echo "Human formatting blob sizes..." >&2
 	for blob_hash in "${!blob_to_size[@]}"; do
 		blob_to_size_pretty["$blob_hash"]=$(format_size "${blob_to_size[$blob_hash]}")
 	done
-	readonly -A blob_to_size_pretty # Fully populated
+	readonly -A blob_to_size_pretty
+	echo "done." >&2
 
-	echo "done" >&2
-	echo "  ◼ Included files: ${#path_is_included[@]}" >&2
-	echo "  ◼ Excluded files: ${#path_is_excluded[@]}" >&2
-	echo "  ◼ Total modes captured: ${#path_to_mode[@]}" >&2
-	echo "  ◼ Total unique blobs: ${#blob_to_size[@]}" >&2
+	# --- Stage 2: Apply Name Filters ---
+	echo -n "Applying name filters... " >&2
+	local -a paths_after_include=()
+	local rel_path full_path
+
+	# Pass 1: Inclusion filter (allow-list)
+	if ((include_pattern_arg_set)); then
+		for rel_path in "${!path_to_blob[@]}"; do
+			full_path="$rel_path"
+			if [[ "$subdir_rel" != "." ]]; then
+				full_path="${subdir_rel}/${rel_path}"
+			fi
+
+			if [[ "$full_path" =~ $include_pattern_arg ]]; then
+				paths_after_include+=("$rel_path")
+			else
+				path_is_rejected_by_include["$rel_path"]=1
+			fi
+		done
+	else
+		# If no include filter, all initial candidates pass this stage.
+		mapfile -t paths_after_include < <(printf '%s\n' "${!path_to_blob[@]}")
+	fi
+
+	# Pass 2: Exclusion filter (block-list)
+	if ((exclude_pattern_arg_set)); then
+		for rel_path in "${paths_after_include[@]}"; do
+			full_path="$rel_path"
+			if [[ "$subdir_rel" != "." ]]; then
+				full_path="${subdir_rel}/${rel_path}"
+			fi
+
+			if [[ "$full_path" =~ $exclude_pattern_arg ]]; then
+				path_is_rejected_by_exclude["$rel_path"]=1
+			else
+				path_is_selected_for_analysis["$rel_path"]=1
+			fi
+		done
+	else
+		# If no exclude filter, all paths that passed inclusion are selected.
+		for rel_path in "${paths_after_include[@]}"; do
+			path_is_selected_for_analysis["$rel_path"]=1
+		done
+	fi
+	echo "done." >&2
+
+	readonly -A path_is_rejected_by_include path_is_rejected_by_exclude path_is_selected_for_analysis
+
+	# --- Final Sanity Check and Summary ---
+	if ((${#path_is_selected_for_analysis[@]} == 0)); then
+		echo "All files were filtered out. No files selected for analysis." >&2
+	fi
+
+	echo "Filtering summary:" >&2
+	echo "  ◼ Initial candidates:            $initial_candidate_count" >&2
+	echo "  ◼ Rejected by --include filter:  ${#path_is_rejected_by_include[@]}" >&2
+	echo "  ◼ Rejected by --exclude filter:  ${#path_is_rejected_by_exclude[@]}" >&2
+	echo "  ◼ Selected for analysis:         ${#path_is_selected_for_analysis[@]}" >&2
 }
 
 ###############################################
 #### 3. Classification Pipeline & Content Analysis
 ###############################################
 
-# Path → metadata/status mappings
-declare -A path_is_binary=()    # [rel_path] → 1 (marked binary via .gitattributes)
-declare -A path_is_submodule=() # [rel_path] → 1 (Git submodule)
-declare -A path_is_symlink=()   # [rel_path] → 1 (symbolic link)
-declare -A path_has_lfs=()      # [rel_path] → 1 (LFS pointer file)
+# Path-level classifications (populated for the whole subtree)
+declare -A path_is_submodule=()     # [rel_path] -> 1 (Git submodule)
+declare -A path_is_symlink=()       # [rel_path] -> 1 (symbolic link)
+declare -A path_to_submodule_url=() # [rel_path] -> submodule repository URL
 
-# Path → value mappings
-declare -A path_to_lfs_size=()        # [rel_path] → stored LFS size (bytes)
-declare -A path_to_lfs_size_pretty=() # [rel_path] → formatted LFS size
-declare -A path_to_submodule_url=()   # [rel_path] → submodule repository URL
+# Path-level classifications (populated only for selected files)
+declare -A path_is_binary=()          # [rel_path] -> 1 (marked binary via .gitattributes)
+declare -A path_has_lfs=()            # [rel_path] -> 1 (LFS pointer file)
+declare -A path_to_lfs_size=()        # [rel_path] -> stored LFS size (bytes)
+declare -A path_to_lfs_size_pretty=() # [rel_path] -> formatted LFS size
 
-# Blob status flags
-declare -A blob_has_invalid_utf8=() # [blob] → 1 (invalid UTF-8 sequences)
-declare -A blob_has_nonprint=()     # [blob] → 1 (non-printable chars)
-declare -A blob_has_nulls=()        # [blob] → 1 (contains NUL bytes)
-declare -A blob_is_candidate=()     # [blob] → 1 (eligible for analysis)
-declare -A blob_is_oversize=()      # [blob] → 1 (exceeds size threshold)
-declare -A blob_is_safe=()          # [blob] → 1 (safe for concatenation)
-
-# Blob → value mappings
-declare -A blob_to_nonprint_count=() # [blob] → quantity of non-printable chars
-declare -A blob_to_null_count=()     # [blob] → number of NUL bytes
-declare -A blob_to_symlink=()        # [blob] → resolved target path (symlinks)
+# Blob-level classifications (populated only for selected blobs)
+declare -A blob_has_invalid_utf8=()  # [blob] -> 1 (invalid UTF-8 sequences)
+declare -A blob_has_nonprint=()      # [blob] -> 1 (non-printable chars)
+declare -A blob_has_nulls=()         # [blob] -> 1 (contains NUL bytes)
+declare -A blob_is_oversize=()       # [blob] -> 1 (exceeds size threshold)
+declare -A blob_is_safe=()           # [blob] -> 1 (safe for concatenation)
+declare -A blob_to_nonprint_count=() # [blob] -> quantity of non-printable chars
+declare -A blob_to_null_count=()     # [blob] -> number of NUL bytes
+declare -A blob_to_symlink=()        # [blob] -> resolved target path (symlinks)
 
 ### Path Normalization
 normalize_path() {
@@ -771,62 +801,52 @@ normalize_path() {
 
 ### Submodule Detection
 detect_submodules() {
-	echo -n "Detecting submodules... " >&2
+	echo -n "Detecting submodules in subtree... " >&2
 
+	# This runs on ALL paths in the subtree to build a complete inventory.
+	# The reporting stage will then determine if a submodule was included or excluded.
 	for rel_path in "${!path_to_mode[@]}"; do
 		if [[ "${path_to_mode[$rel_path]}" == "160000" ]]; then
-			if [[ -v path_to_blob["$rel_path"] ]]; then
-				path_is_submodule["$rel_path"]=1
-				path_to_submodule_url["$rel_path"]=$(git config -f <(
-					git cat-file blob "$ref_hash:.gitmodules" 2>/dev/null || echo ""
-				) --get "submodule.$rel_path.url" 2>/dev/null | head -n1)
-				: "${path_to_submodule_url["$rel_path"]:="<unknown>"}"
-			else
-				echo "WARNING: Submodule path '$rel_path' with mode 160000 not found in path_to_blob" >&2
-			fi
+			path_is_submodule["$rel_path"]=1
+			path_to_submodule_url["$rel_path"]=$(git config -f <(
+				git cat-file blob "$ref_hash:.gitmodules" 2>/dev/null || echo ""
+			) --get "submodule.$rel_path.url" 2>/dev/null | head -n1)
+			: "${path_to_submodule_url["$rel_path"]:="<unknown>"}"
 		fi
 	done
 	readonly -A path_is_submodule path_to_submodule_url # Fully populated
 
-	echo "done (${#path_is_submodule[@]} found)" >&2
+	echo "done (${#path_is_submodule[@]} found)." >&2
 }
 
 ### Symlink Detection
 detect_symlinks() {
-	echo -n "Detecting symlinks... " >&2
+	echo -n "Detecting symlinks in subtree... " >&2
 
-	# Step 1: Collect symlink paths
+	# This runs on ALL paths to build a complete inventory.
+	local -a symlink_paths=()
 	for rel_path in "${!path_to_mode[@]}"; do
 		if [[ "${path_to_mode[$rel_path]}" == "120000" ]]; then
-			if [[ -v path_to_blob["$rel_path"] ]]; then
-				path_is_symlink["$rel_path"]=1
-			else
-				echo "WARNING: No blob hash for symlink path '$rel_path'" >&2
-			fi
+			path_is_symlink["$rel_path"]=1
+			symlink_paths+=("$rel_path")
 		fi
 	done
 
-	# Step 2: Early exit if no symlinks found
-	if [[ ${#path_is_symlink[@]} -eq 0 ]]; then
+	if [[ ${#symlink_paths[@]} -eq 0 ]]; then
 		readonly -A path_is_symlink blob_to_symlink
-		echo "done (0 found)" >&2
+		echo "done (0 found)." >&2
 		return
 	fi
 
-	# Step 3: Get unique SHAs for symlinks
 	local -a unique_shas=()
-	for rel_path in "${!path_is_symlink[@]}"; do
+	for rel_path in "${symlink_paths[@]}"; do
 		unique_shas+=("${path_to_blob[$rel_path]}")
 	done
 	mapfile -t unique_shas < <(printf "%s\n" "${unique_shas[@]}" | sort -u)
-	readonly -a unique_shas
 
-	# Step 4: Populate blob_to_symlink with blob content
 	while IFS= read -r -d '' header; do
 		if [[ "$header" =~ ^([0-9a-f]{40})\ blob\ ([0-9]+)$ ]]; then
-			local sha="${BASH_REMATCH[1]}"
-			local size="${BASH_REMATCH[2]}"
-			local content
+			local sha="${BASH_REMATCH[1]}" size="${BASH_REMATCH[2]}" content
 			if ((size > 0)); then
 				read -r -N "$size" content
 				read -r -N 1 _discard
@@ -838,52 +858,31 @@ detect_symlinks() {
 	done < <(printf "%s\0" "${unique_shas[@]}" | git -C "$repo_root" cat-file --batch --buffer -z)
 
 	readonly -A path_is_symlink blob_to_symlink
-	echo "done (${#path_is_symlink[@]} found)" >&2
-}
-
-### Cross-Array Validation
-validate_path_metadata() {
-	local path="$1"
-	[[ -v path_to_blob["$path"] ]] || return 1
-	[[ -v path_to_mode["$path"] ]] || return 1
-
-	if [[ -v path_has_lfs["$path"] ]]; then
-		[[ -v path_to_lfs_size["$path"] ]] || return 1
-	fi
-
-	if [[ -v path_is_submodule["$path"] ]]; then
-		[[ -v path_to_submodule_url["$path"] ]] || return 1
-	fi
-
-	if [[ -v path_is_symlink["$path"] ]]; then
-		local blob_hash="${path_to_blob[$path]}"
-		[[ -v blob_to_symlink["$blob_hash"] ]] || return 1
-	fi
-
-	return 0
+	echo "done (${#path_is_symlink[@]} found)." >&2
 }
 
 ### Attribute Processing
 collect_attribute_data() {
-	local path normalized_path rel_path remaining
-	[[ ${#path_is_included[@]} -eq 0 ]] && return
+	# This operates ONLY on the final set of files selected for analysis.
+	if [[ ${#path_is_selected_for_analysis[@]} -eq 0 ]]; then
+		echo "Skipping Git attributes scan: no files selected." >&2
+		return
+	fi
 
-	local -a validated_paths=()
-	for rel_path in "${!path_is_included[@]}"; do
-		validate_path_metadata "$rel_path" && validated_paths+=("$rel_path")
-	done
-	readonly -a validated_paths # Populated and final
+	echo -n "Scanning Git attributes for selected files... " >&2
+	local path rel_path remaining
 
-	echo -n "Scanning Git attributes... " >&2
+	# Use the keys of the selected files map as input for check-attr
+	local -a selected_paths=("${!path_is_selected_for_analysis[@]}")
 
 	while IFS= read -d $'\0' -r line; do
 		path="${line%%$'\n'*}"
 		remaining="${line#*$'\n'}"
-		normalized_path=$(normalize_path "$path")
-		rel_path="${normalized_path#"${subdir_rel}/"}"
+		# The path returned by check-attr is already the relative path we need.
+		rel_path=$(normalize_path "$path")
 
-		[[ "$subdir_rel" == "." ]] && rel_path="$normalized_path"
-		[[ -v path_to_blob["$rel_path"] ]] || continue
+		# Ensure this path is one we are actually processing
+		[[ -v path_is_selected_for_analysis["$rel_path"] ]] || continue
 
 		while [[ "$remaining" =~ ([^:]+):\ ([^\n]+)(\n|$) ]]; do
 			case "${BASH_REMATCH[1],,}" in
@@ -898,10 +897,10 @@ collect_attribute_data() {
 			esac
 			remaining="${remaining#*"${BASH_REMATCH[0]}"}"
 		done
-	done < <(git -C "$repo_root" check-attr --cached --all -z -- "${validated_paths[@]}")
+	done < <(git -C "$repo_root" check-attr --cached --all -z -- "${selected_paths[@]}")
 	readonly -A path_has_lfs path_is_binary # Fully populated
 
-	echo "completed" >&2
+	echo "completed." >&2
 	((${#path_has_lfs[@]} > 0)) && echo "  ◼ Found ${#path_has_lfs[@]} LFS pointers" >&2
 	((${#path_is_binary[@]} > 0)) && echo "  ◼ Found ${#path_is_binary[@]} binary-marked files" >&2
 }
@@ -912,16 +911,12 @@ capture_path_to_lfs_size() {
 
 	echo -n "Capturing LFS sizes... " >&2
 
-	# Get unique blob hashes for LFS paths
 	local -a lfs_blobs=()
 	for rel_path in "${!path_has_lfs[@]}"; do
-		validate_path_metadata "$rel_path" || continue
 		lfs_blobs+=("${path_to_blob[$rel_path]}")
 	done
 	mapfile -t lfs_blobs < <(printf "%s\n" "${lfs_blobs[@]}" | sort -u)
-	readonly -a lfs_blobs
 
-	# Process LFS blob sizes
 	printf "%s\n" "${lfs_blobs[@]}" |
 		git -C "$repo_root" cat-file --batch |
 		perl -0n -e '
@@ -929,7 +924,6 @@ capture_path_to_lfs_size() {
                 print "$1 $3\n";
             }
         ' | while read -r blob stored_size; do
-		# Map size back to all paths with this blob
 		for rel_path in "${!path_has_lfs[@]}"; do
 			if [[ "${path_to_blob[$rel_path]}" == "$blob" ]]; then
 				path_to_lfs_size["$rel_path"]=$((stored_size))
@@ -937,17 +931,15 @@ capture_path_to_lfs_size() {
 		done
 	done
 
-	# Set default size of 0 for any LFS paths not processed
 	for rel_path in "${!path_has_lfs[@]}"; do
 		[[ -v path_to_lfs_size["$rel_path"] ]] || path_to_lfs_size["$rel_path"]=0
 	done
-	readonly -A path_to_lfs_size # Fully populated
+	readonly -A path_to_lfs_size
 
-	# Format LFS sizes
 	for rel_path in "${!path_to_lfs_size[@]}"; do
 		path_to_lfs_size_pretty["$rel_path"]=$(format_size "${path_to_lfs_size[$rel_path]}")
 	done
-	readonly -A path_to_lfs_size_pretty # Fully populated
+	readonly -A path_to_lfs_size_pretty
 
 	echo "done" >&2
 }
@@ -957,7 +949,7 @@ analyze_content_safety() {
 	local -a check_blobs=("$@")
 	((${#check_blobs[@]} == 0)) && return
 
-	echo -n "Analyzing content safety... " >&2
+	echo -n "Analyzing content safety for candidate blobs... " >&2
 
 	while read -r blob null_count nonprint_count is_valid_utf8; do
 		if ((null_count > 0)); then
@@ -1006,32 +998,26 @@ analyze_content_safety() {
 	)
 	readonly -A blob_has_nulls blob_has_invalid_utf8 blob_has_nonprint blob_to_null_count blob_to_nonprint_count
 
-	echo "done" >&2
-	echo "Processed ${#check_blobs[@]} file blobs:" >&2
-	echo "  ◼ Contained null bytes:  ${#blob_has_nulls[@]}" >&2
-	echo "  ◼ Contained invalid UTF8:  ${#blob_has_invalid_utf8[@]}" >&2
-	echo "  ◼ Non-printable/binary:  ${#blob_has_nonprint[@]}" >&2
+	echo "done (${#check_blobs[@]} blobs)." >&2
 }
 
 ### Classification Workflow
 process_files() {
-	echo "Processing ${#path_is_included[@]} files:" >&2
+	local -i file_count=${#path_is_selected_for_analysis[@]}
+	echo "Processing ${file_count} selected files:" >&2
 
+	# Step 1: Detect special file types across the entire subtree for complete context
 	detect_submodules
 	detect_symlinks
+
+	# Step 2: Collect specific attributes (LFS, etc.) only for the final set of files
 	collect_attribute_data
 	capture_path_to_lfs_size
 
-	for rel_path in "${!path_is_included[@]}"; do
-		if ! validate_path_metadata "$rel_path"; then
-			echo "WARNING: Skipping incomplete metadata for: $rel_path" >&2
-			unset "path_is_included[$rel_path]"
-		fi
-	done
-
-	# Step 1: Identify candidate blobs
+	# Step 3: Identify blobs that are candidates for deep content analysis
 	declare -A blob_is_candidate=()
-	for rel_path in "${!path_is_included[@]}"; do
+	for rel_path in "${!path_is_selected_for_analysis[@]}"; do
+		# Skip special file types that are not eligible for content analysis
 		if [[ -v path_is_submodule["$rel_path"] ]] ||
 			[[ -v path_is_symlink["$rel_path"] ]] ||
 			[[ -v path_has_lfs["$rel_path"] ]] ||
@@ -1048,12 +1034,12 @@ process_files() {
 			blob_is_candidate["$blob_hash"]=1
 		fi
 	done
-	readonly -A blob_is_oversize blob_is_candidate
+	readonly -A blob_is_oversize
 
-	# Step 2: Analyze content safety for candidate blobs
+	# Step 4: Analyze content safety only for the candidate blobs
 	analyze_content_safety "${!blob_is_candidate[@]}"
 
-	# Step 3: Classify blobs as concatenatable
+	# Step 5: Classify blobs as safe for concatenation
 	for blob_hash in "${!blob_is_candidate[@]}"; do
 		if [[ -v blob_is_oversize["$blob_hash"] ]] ||
 			[[ -v blob_has_nulls["$blob_hash"] ]] ||
@@ -1066,8 +1052,12 @@ process_files() {
 	done
 	readonly -A blob_is_safe
 
-	((${#blob_is_oversize[@]} > 0)) && echo "  ◼ Size exclusions: ${#blob_is_oversize[@]} blobs" >&2
-	echo "  ◼ Safe text blobs: ${#blob_is_safe[@]} blobs" >&2
+	echo "Content analysis summary:" >&2
+	echo "  ◼ Blobs oversized:      ${#blob_is_oversize[@]}" >&2
+	echo "  ◼ Blobs with nulls:     ${#blob_has_nulls[@]}" >&2
+	echo "  ◼ Blobs with invalid UTF8: ${#blob_has_invalid_utf8[@]}" >&2
+	echo "  ◼ Blobs with non-print: ${#blob_has_nonprint[@]}" >&2
+	echo "  ◼ Blobs safe for concat:  ${#blob_is_safe[@]}" >&2
 }
 
 ################################################
@@ -1097,17 +1087,6 @@ buffer_append() {
 		CONCLUSION_BUFFER+="$append_text"$'\n'
 	else
 		fail_with 40 "buffer_append: unknown buffer '$current_buffer'"
-	fi
-}
-
-buffer_reset() {
-	# Stateful buffer clearance
-	if [[ "$current_buffer" == "INTRODUCTION" ]]; then
-		INTRODUCTION_BUFFER=""
-	elif [[ "$current_buffer" == "CONCLUSION" ]]; then
-		CONCLUSION_BUFFER=""
-	else
-		fail_with 40 "buffer_reset: unknown buffer '$current_buffer'"
 	fi
 }
 
@@ -1164,7 +1143,7 @@ add_section() {
 add_stat_row() {
 	# Formatted statistic row
 	local label="$1" value="$2" color="${3:-neutral}"
-	buffer_append "$(printf "  %-30s %s" "$(apply_color "${label}" "${COLORS[$color]}")" "${value}")"
+	buffer_append "$(printf "  %-35s %s" "$(apply_color "${label}" "${COLORS[$color]}")" "${value}")"
 }
 
 # Tree Renderer
@@ -1281,23 +1260,23 @@ format_count() {
 ### III. Report Data Pipeline
 # Purpose: Curate and validate analysis results for output
 
+declare -A report_data=()
 collect_report_data() {
-	# Aggregate metrics
+	# Aggregate metrics for the final set of selected files
 	local -i total_size=0
-	for rel_path in "${!path_is_included[@]}"; do
+	for rel_path in "${!path_is_selected_for_analysis[@]}"; do
 		local blob_hash="${path_to_blob[$rel_path]}"
-		if [[ -v blob_to_size["$blob_hash"] ]]; then
-			((total_size += blob_to_size["$blob_hash"]))
-		else
-			echo "WARNING: No size found for blob $blob_hash (path: $rel_path)" >&2
-		fi
+		((total_size += blob_to_size["$blob_hash"]))
 	done
-	readonly total_size # Local and final
+
+	local -i lfs_size=0
+	for rel_path in "${!path_has_lfs[@]}"; do
+		((lfs_size += path_to_lfs_size["$rel_path"]))
+	done
 
 	# Count files with issues based on blob_hash properties
 	local -i oversize_count=0 null_count=0 invalid_utf8_count=0 nonprint_count=0 concatenatable_count=0
-
-	for rel_path in "${!path_is_included[@]}"; do
+	for rel_path in "${!path_is_selected_for_analysis[@]}"; do
 		local blob_hash="${path_to_blob[$rel_path]}"
 
 		if [[ -v blob_is_oversize["$blob_hash"] ]]; then
@@ -1308,335 +1287,296 @@ collect_report_data() {
 			((invalid_utf8_count++))
 		elif [[ -v blob_has_nonprint["$blob_hash"] ]]; then
 			((nonprint_count++))
-		elif [[ -v blob_is_safe["$blob_hash"] ]]; then
-			((concatenatable_count++))
+		elif [[ -v blob_is_safe["$blob_hash"] ]]; then # Eligible for concatenation
+			# Only count as concatenatable if it's not a special file type at the path level
+			if ! [[ -v path_is_symlink["$rel_path"] ||
+				-v path_is_submodule["$rel_path"] ||
+				-v path_has_lfs["$rel_path"] ||
+				-v path_is_binary["$rel_path"] ]]; then
+				((concatenatable_count++))
+			fi
 		fi
 	done
 
-	# Added file_counts_total_pre_exclusion to hold the true total.
-	local -i total_pre_exclusion=$((${#path_is_included[@]} + ${#path_is_excluded[@]}))
-
-	declare -gA report_data=(
-		[file_counts_included]=${#path_is_included[@]}
-		[file_counts_total_pre_exclusion]=$total_pre_exclusion
+	report_data=(
+		[file_counts_initial_candidates]=${#path_to_blob[@]}
+		[file_counts_rejected_by_include]=${#path_is_rejected_by_include[@]}
+		[file_counts_rejected_by_exclude]=${#path_is_rejected_by_exclude[@]}
+		[file_counts_selected]=${#path_is_selected_for_analysis[@]}
 		[file_counts_concatenatable]=$concatenatable_count
-		[file_counts_submodules]=${#path_is_submodule[@]}
-		[file_counts_symlinks]=${#path_is_symlink[@]}
-		[file_counts_lfs]=${#path_has_lfs[@]}
-		[file_counts_binary]=${#path_is_binary[@]}
+		[file_counts_submodules]=${#path_is_submodule[@]} # From all subtree files for context
+		[file_counts_symlinks]=${#path_is_symlink[@]}     # From all subtree files for context
+		[file_counts_lfs]=${#path_has_lfs[@]}             # Only for selected files
+		[file_counts_binary]=${#path_is_binary[@]}        # Only for selected files
 		[file_counts_null]=$null_count
 		[file_counts_invalid_utf8]=$invalid_utf8_count
 		[file_counts_nonprint]=$nonprint_count
 		[file_counts_oversize]=$oversize_count
 		[repo_total_size]=$total_size
-		[repo_lfs_size]=$(
-			IFS=+
-			echo "$((${path_to_lfs_size[*]:-0}))" # Added default to prevent errors on empty array
-		)
+		[repo_lfs_size]=$lfs_size
 		[max_file_size]="$max_file_size_arg"
-		[excluded_count]="${#path_is_excluded[@]}"
 	)
 	readonly -A report_data # Fully populated
-}
-
-validate_report_data() {
-	# Metric consistency guards. Exits immediately on first failure.
-	if [[ ! -v report_data[file_counts_included] ]]; then
-		fail_with 41 "Critical report field missing: 'file_counts_included'."
-	fi
-
-	if ! [[ "${report_data[file_counts_included]}" =~ ^[0-9]+$ ]]; then
-		fail_with 41 "Invalid report data: 'file_counts_included' is not an integer."
-	fi
-
-	if ((report_data[file_counts_included] < 0)); then
-		fail_with 41 "Invalid report data: 'file_counts_included' is negative."
-	fi
 }
 
 ### IV. Report Composition Engine
 # Purpose: Structured assembly of report components
 
-add_summary_section() {
-	# Key metrics card
-	add_header "GIT SUBTREE ANALYSIS REPORT"
-	buffer_append "$(printf "%s %-20s: %s" "${BOX_CHARS[vertical]}" "Repository Root" "$repo_root")"
-	buffer_append "$(printf "%s %-20s: %s" "${BOX_CHARS[vertical]}" "Analyzed Path" "${subdir_rel:-/}")"
-	buffer_append "$(printf "%s %-20s: %s" "${BOX_CHARS[vertical]}" "Git Commit" "${ref_hash:0:8}")"
-	add_divider "${BOX_CHARS[line_single]}" 80 "detail"
-	buffer_append "$(printf "%s %-20s: %s" "${BOX_CHARS[vertical]}" "Exclusion Filter" "'${exclude_pattern_arg:-<none>}'")  (ERE)"
-	buffer_append "$(printf "%s %-20s: %s" "${BOX_CHARS[vertical]}" "Processed Files" "${report_data[file_counts_included]}")"
-}
+add_list_with_size() {
+	local -n path_map="$1"
+	((${#path_map[@]} == 0)) && return
 
-add_file_analysis() {
-	# File taxonomy breakdown
-	local start_time end_time duration
-	start_time=$(date +%s.%N)
-	add_section "FILE COMPOSITION"
-
-	local -r notice_categories=(
-		"concatenatable:Concatenatable:${report_data[file_counts_concatenatable]}:good"
-		"submodule:Submodules:${report_data[file_counts_submodules]}:warn"
-		"symlink:Symlinks:${report_data[file_counts_symlinks]}:warn"
-		"lfs:LFS pointers:${report_data[file_counts_lfs]}:warn"
-		"git_binary:Binary files:${report_data[file_counts_binary]}:bad"
-		"oversize:Oversized files:${report_data[file_counts_oversize]}:neutral"
-		"null_byte:Null byte files:${report_data[file_counts_null]}:neutral"
-		"invalid_utf8:Invalid UTF8 files:${report_data[file_counts_invalid_utf8]}:neutral"
-		"non_printable:Non-printable files:${report_data[file_counts_nonprint]}:neutral"
-	)
-
-	local category array_name label count color
-	for category in "${notice_categories[@]}"; do
-		IFS=':' read -r array_name label count color <<<"$category"
-		add_stat_row "${label}:" "$(format_count "$count" "${report_data[file_counts_included]}")" "${color}"
-		if [[ "$count" -gt 0 ]]; then
-			buffer_append "$(apply_color "  » ${label}:" "${COLORS[detail]}")"
-			case "$array_name" in
-			submodule) add_submodule_details "${!path_is_submodule[@]}" ;;
-			symlink) add_symlink_details "${!path_is_symlink[@]}" ;;
-			concatenatable | git_binary | oversize | invalid_utf8) add_simple_size_details "$array_name" ;;
-			lfs) add_lfs_details "${!path_has_lfs[@]}" ;;
-			null_byte | non_printable) add_prefix_details "$array_name" ;;
-			esac
-		fi
-	done
-
-	end_time=$(date +%s.%N)
-	duration=$(bc -l <<<"$end_time - $start_time")
-	echo "add_file_analysis completed in $(printf "%.3f" "$duration") seconds" >&2
-}
-
-add_size_analysis() {
-	# Storage visualizer
-	add_section "SIZE ANALYSIS"
-	add_stat_row "Total size (included files):" "$(format_size "${report_data[repo_total_size]}")" "neutral"
-	add_stat_row "LFS storage size:" "$(format_size "${report_data[repo_lfs_size]}")" "neutral"
-	add_stat_row "Size threshold:" "$(format_size "${report_data[max_file_size]}")" "neutral"
-}
-
-add_exclusion_details() {
-	# Filter coverage analysis
-	((report_data[excluded_count] == 0)) && return
-	add_section "EXCLUSION DETAILS"
-
-	local -r total_pre_exclusion="${report_data[file_counts_total_pre_exclusion]}"
-
-	# Reports included file count against the pre-exclusion total
-	add_stat_row "Included files:" \
-		"$(format_count "${report_data[file_counts_included]}" "$total_pre_exclusion")" "neutral"
-
-	# Reports excluded file count against the pre-exclusion total
-	add_stat_row "Excluded files:" \
-		"$(format_count "${report_data[excluded_count]}" "$total_pre_exclusion")" "warn"
-
-	# Adds a list of the excluded files for full transparency.
-	if [[ "${report_data[excluded_count]}" -gt 0 ]]; then
-		buffer_append "$(apply_color "  » Excluded Paths (matching '${exclude_pattern_arg}'):" "${COLORS[detail]}")"
-		local max_size_len=0
-		while IFS= read -r rel_path; do
-			local blob_hash="${path_to_blob[$rel_path]}"
-			local formatted_size="${blob_to_size_pretty[$blob_hash]}"
-			local len=${#formatted_size}
-			((len > max_size_len)) && max_size_len=$len
-		done < <(printf '%s\n' "${!path_is_excluded[@]}" | sort)
-
-		while IFS= read -r rel_path; do
-			local blob_hash="${path_to_blob[$rel_path]}"
-			local formatted_size="${blob_to_size_pretty[$blob_hash]}"
-			local padded_size
-			padded_size=$(printf "%-*s" "$max_size_len" "$formatted_size")
-			buffer_append "    - [${padded_size}] ${rel_path}"
-		done < <(printf '%s\n' "${!path_is_excluded[@]}" | sort)
-	fi
-}
-
-# Dynamic Layout Manager
-add_submodule_details() {
-	local files=("$@")
-	local rel_path url
-	while IFS= read -r rel_path; do
-		if [[ ! -v path_to_blob["$rel_path"] ]]; then
-			fail_with 41 "No blob hash found for submodule path: $rel_path"
-		fi
-		url="${path_to_submodule_url[$rel_path]}"
-		buffer_append "    - ${rel_path} $(apply_color "[🢒 ${url}]" "${COLORS[detail]}")"
-	done < <(printf '%s\n' "${files[@]}" | sort)
-}
-
-add_symlink_details() {
-	local files=("$@")
-	local rel_path dest blob_hash
-	while IFS= read -r rel_path; do
-		if [[ ! -v path_to_blob["$rel_path"] ]]; then
-			fail_with 41 "No blob hash found for symlink path: $rel_path"
-		fi
-		blob_hash="${path_to_blob[$rel_path]}"
-		dest="${blob_to_symlink[$blob_hash]:-<target not found>}"
-		buffer_append "    - ${rel_path} $(apply_color "[→ ${dest}]" "${COLORS[detail]}")"
-	done < <(printf '%s\n' "${files[@]}" | sort)
-}
-
-add_simple_size_details() {
-	local array_name="$1"
-	local max_size_len=0 rel_path blob_hash formatted_size len padded_size prefix additional
-
-	# Determine target array
-	local target_array
-	case "$array_name" in
-	concatenatable) target_array="blob_is_safe" ;;
-	git_binary) target_array="path_is_binary" ;;
-	oversize) target_array="blob_is_oversize" ;;
-	invalid_utf8) target_array="blob_has_invalid_utf8" ;;
-	*)
-		fail_with 40 "add_simple_size_details: Unknown array_name '$array_name'"
-		;;
-	esac
-
-	# Collect paths associated with blobs or directly from path-based array
-	declare -A target_files=()
-	if [[ "$array_name" == "git_binary" ]]; then
-		for rel_path in "${!path_is_binary[@]}"; do
-			target_files["$rel_path"]=1
-		done
-	else
-		for rel_path in "${!path_is_included[@]}"; do
-			blob_hash="${path_to_blob[$rel_path]}"
-			if [[ -v "${target_array}[$blob_hash]" ]]; then
-				target_files["$rel_path"]=1
-			fi
-		done
-	fi
-
-	# Calculate max size length
+	local -i max_size_len=0
+	local rel_path blob_hash formatted_size len
 	while IFS= read -r rel_path; do
 		blob_hash="${path_to_blob[$rel_path]}"
 		formatted_size="${blob_to_size_pretty[$blob_hash]}"
 		len=${#formatted_size}
 		((len > max_size_len)) && max_size_len=$len
-	done < <(printf '%s\n' "${!target_files[@]}" | sort)
+	done < <(printf '%s\n' "${!path_map[@]}" | sort -V)
 
-	# Generate details
 	while IFS= read -r rel_path; do
 		blob_hash="${path_to_blob[$rel_path]}"
 		formatted_size="${blob_to_size_pretty[$blob_hash]}"
-		padded_size=$(printf "%-*s" "$max_size_len" "$formatted_size")
-		prefix="[${padded_size}]"
-		additional=$(build_additional "$array_name" "$rel_path")
-		buffer_append "    - ${prefix} ${rel_path}${additional:+ $additional}"
-	done < <(printf '%s\n' "${!target_files[@]}" | sort)
+		buffer_append "$(printf "    - [%-*s] %s" "$max_size_len" "$formatted_size" "$rel_path")"
+	done < <(printf '%s\n' "${!path_map[@]}" | sort -V)
+}
+
+add_filtering_report() {
+	add_section "NAME-BASED FILTERING REPORT"
+
+	local total="${report_data[file_counts_initial_candidates]}"
+	add_stat_row "Total files in subtree:" "$total" "neutral"
+	add_divider "${BOX_CHARS[line_single]}" 80 "detail"
+
+	# Group 1: Rejected by --include
+	local count="${report_data[file_counts_rejected_by_include]}"
+	add_stat_row "Rejected by --include filter:" "$(format_count "$count" "$total")" "warn"
+	if ((count > 0)); then
+		buffer_append "$(apply_color "  » Paths not matching '${include_pattern_arg}':" "${COLORS[detail]}")"
+		add_list_with_size path_is_rejected_by_include
+	fi
+
+	# Group 2: Rejected by --exclude
+	count="${report_data[file_counts_rejected_by_exclude]}"
+	add_stat_row "Rejected by --exclude filter:" "$(format_count "$count" "$total")" "warn"
+	if ((count > 0)); then
+		buffer_append "$(apply_color "  » Paths matching '${exclude_pattern_arg}':" "${COLORS[detail]}")"
+		add_list_with_size path_is_rejected_by_exclude
+	fi
+
+	# Group 3: Final selected set
+	count="${report_data[file_counts_selected]}"
+	add_stat_row "Final set for analysis:" "$(format_count "$count" "$total")" "good"
+	if ((count > 0)); then
+		buffer_append "$(apply_color "  » Paths selected for content analysis:" "${COLORS[detail]}")"
+		add_list_with_size path_is_selected_for_analysis
+	fi
+}
+
+add_file_analysis() {
+	local -i total_selected=${report_data[file_counts_selected]}
+	((total_selected == 0)) && return
+
+	add_section "CONTENT ANALYSIS REPORT (for ${total_selected} selected files)"
+
+	local -r notice_categories=(
+		"concatenatable:Concatenatable Files:${report_data[file_counts_concatenatable]}:good"
+		"submodule:Submodules Found:${report_data[file_counts_submodules]}:warn"
+		"symlink:Symbolic Links Found:${report_data[file_counts_symlinks]}:warn"
+		"lfs:LFS Pointers:${report_data[file_counts_lfs]}:warn"
+		"git_binary:Marked as Binary:${report_data[file_counts_binary]}:bad"
+		"oversize:Oversized Files:${report_data[file_counts_oversize]}:neutral"
+		"null_byte:Files with NULL Bytes:${report_data[file_counts_null]}:neutral"
+		"invalid_utf8:Files with Invalid UTF-8:${report_data[file_counts_invalid_utf8]}:neutral"
+		"non_printable:Files with Non-Printable Chars:${report_data[file_counts_nonprint]}:neutral"
+	)
+
+	local category array_name label count color
+	for category in "${notice_categories[@]}"; do
+		IFS=':' read -r array_name label count color <<<"$category"
+		add_stat_row "${label}:" "$(format_count "$count" "$total_selected")" "${color}"
+		if ((count > 0)); then
+			case "$array_name" in
+			concatenatable) add_details_for_safe_files ;;
+			submodule) add_submodule_details ;;
+			symlink) add_symlink_details ;;
+			lfs) add_lfs_details ;;
+			git_binary) add_git_binary_details ;;
+			oversize) add_oversize_details ;;
+			invalid_utf8) add_invalid_utf8_details ;;
+			null_byte) add_null_byte_details ;;
+			non_printable) add_nonprint_details ;;
+			esac
+		fi
+	done
+}
+
+add_size_analysis() {
+	local -i total_selected=${report_data[file_counts_selected]}
+	((total_selected == 0)) && return
+
+	add_section "SIZE ANALYSIS (for ${total_selected} selected files)"
+	add_stat_row "Total size (selected files):" "$(format_size "${report_data[repo_total_size]}")" "neutral"
+	add_stat_row "LFS storage size:" "$(format_size "${report_data[repo_lfs_size]}")" "neutral"
+	add_stat_row "Size threshold for content analysis:" "$(format_size "${report_data[max_file_size]}")" "neutral"
+}
+
+# --- Detail Rendering Helpers ---
+
+add_submodule_details() {
+	while IFS= read -r rel_path; do
+		local url="${path_to_submodule_url[$rel_path]}"
+		buffer_append "    - ${rel_path} $(apply_color "[🢒 ${url}]" "${COLORS[detail]}")"
+	done < <(printf '%s\n' "${!path_is_submodule[@]}" | sort -V)
+}
+
+add_symlink_details() {
+	while IFS= read -r rel_path; do
+		# This uses the previously "unused" blob_to_symlink variable
+		local blob_hash="${path_to_blob[$rel_path]}"
+		local dest="${blob_to_symlink[$blob_hash]:-<target not found>}"
+		buffer_append "    - ${rel_path} $(apply_color "[→ ${dest}]" "${COLORS[detail]}")"
+	done < <(printf '%s\n' "${!path_is_symlink[@]}" | sort -V)
 }
 
 add_lfs_details() {
-	local files=("$@")
-	local max_pointer_len=0 max_stored_len=0 rel_path blob_hash pointer_formatted stored_formatted len_pointer len_stored padded_pointer padded_stored prefix
+	local max_pointer_len=0 max_stored_len=0
+	local len_pointer len_stored
 	while IFS= read -r rel_path; do
-		if [[ ! -v path_to_blob["$rel_path"] ]]; then
-			fail_with 41 "No blob hash found for LFS path: $rel_path"
-		fi
-		blob_hash="${path_to_blob[$rel_path]}"
-		pointer_formatted="${blob_to_size_pretty[$blob_hash]}"
-		stored_formatted="${path_to_lfs_size_pretty[$rel_path]}"
-		len_pointer=${#pointer_formatted}
-		len_stored=${#stored_formatted}
+		len_pointer=${#blob_to_size_pretty[${path_to_blob[$rel_path]}]}
+		len_stored=${#path_to_lfs_size_pretty[$rel_path]}
 		((len_pointer > max_pointer_len)) && max_pointer_len=$len_pointer
 		((len_stored > max_stored_len)) && max_stored_len=$len_stored
-	done < <(printf '%s\n' "${files[@]}" | sort)
+	done < <(printf '%s\n' "${!path_has_lfs[@]}")
 
 	while IFS= read -r rel_path; do
-		blob_hash="${path_to_blob[$rel_path]}"
-		pointer_formatted="${blob_to_size_pretty[$blob_hash]}"
+		# This uses the previously "unused" path_to_lfs_size_pretty variable
+		local pointer_formatted stored_formatted
+		local padded_pointer padded_stored
+		local prefix
+		pointer_formatted="${blob_to_size_pretty[${path_to_blob[$rel_path]}]}"
 		stored_formatted="${path_to_lfs_size_pretty[$rel_path]}"
 		padded_pointer=$(printf "%-*s" "$max_pointer_len" "$pointer_formatted")
 		padded_stored=$(printf "%-*s" "$max_stored_len" "$stored_formatted")
 		prefix="[pointer: $padded_pointer] [stored: $padded_stored]"
 		buffer_append "    - ${prefix} ${rel_path}"
-	done < <(printf '%s\n' "${files[@]}" | sort)
+	done < <(printf '%s\n' "${!path_has_lfs[@]}" | sort -V)
 }
 
-add_prefix_details() {
-	local array_name="$1"
-	local max_inner_size_len=0 max_inner_additional_len=0
-	local rel_path blob_hash formatted_size inner_additional len_inner_size len_inner_additional count_width
-
-	# Determine target array and label
-	local label array_ref
-	if [[ "$array_name" == "null_byte" ]]; then
-		label="NULL"
-		array_ref="blob_has_nulls"
-	else
-		label="NONPRINT"
-		array_ref="blob_has_nonprint"
-	fi
-
-	# Collect target files
-	declare -A target_files=()
-	for rel_path in "${!path_is_included[@]}"; do
-		blob_hash="${path_to_blob[$rel_path]}"
-		[[ -v "${array_ref}[$blob_hash]" ]] && target_files["$rel_path"]=1
-	done
-
-	# Calculate max count for width
-	local max_count=0
-	for rel_path in "${!target_files[@]}"; do
-		blob_hash="${path_to_blob[$rel_path]}"
-		local count
-		if [[ "$array_name" == "null_byte" ]]; then
-			count=${blob_to_null_count[$blob_hash]:-0}
-		else
-			count=${blob_to_nonprint_count[$blob_hash]:-0}
-		fi
-		((count > max_count)) && max_count=$count
-	done
-	count_width=${#max_count}
-
-	# Calculate max lengths
-	while IFS= read -r rel_path; do
-		blob_hash="${path_to_blob[$rel_path]}"
-		formatted_size="${blob_to_size_pretty[$blob_hash]}"
-		len_inner_size=${#formatted_size}
-		((len_inner_size > max_inner_size_len)) && max_inner_size_len=$len_inner_size
-
-		local count
-		if [[ "$array_name" == "null_byte" ]]; then
-			count=${blob_to_null_count[$blob_hash]:-0}
-		else
-			count=${blob_to_nonprint_count[$blob_hash]:-0}
-		fi
-		inner_additional=$(printf "%s ×%${count_width}d" "$label" "$count")
-		len_inner_additional=${#inner_additional}
-		((len_inner_additional > max_inner_additional_len)) && max_inner_additional_len=$len_inner_additional
-	done < <(printf '%s\n' "${!target_files[@]}" | sort)
-
-	# Generate details
-	while IFS= read -r rel_path; do
-		blob_hash="${path_to_blob[$rel_path]}"
-		formatted_size="${blob_to_size_pretty[$blob_hash]}"
-		padded_inner_size=$(printf "%-*s" "$max_inner_size_len" "$formatted_size")
-		size_part="[${padded_inner_size}]"
-
-		local count
-		if [[ "$array_name" == "null_byte" ]]; then
-			count=${blob_to_null_count[$blob_hash]:-0}
-		else
-			count=${blob_to_nonprint_count[$blob_hash]:-0}
-		fi
-		inner_additional=$(printf "%s ×%${count_width}d" "$label" "$count")
-		padded_inner_additional=$(printf "%-*s" "$max_inner_additional_len" "$inner_additional")
-		additional_part="[${padded_inner_additional}]"
-
-		prefix="${size_part} ${additional_part}"
-		buffer_append "    - ${prefix} ${rel_path}"
-	done < <(printf '%s\n' "${!target_files[@]}" | sort)
+add_git_binary_details() {
+	add_list_with_size path_is_binary
 }
 
-build_additional() {
-	# Contextual annotations
-	local -r array_name="$1" rel_path="$2"
-	case "$array_name" in
-	git_binary) apply_color "[binary]" "${COLORS[detail]}" ;;
-	*) ;;
-	esac
+add_oversize_details() {
+	declare -A target_paths
+	while IFS= read -r rel_path; do
+		if [[ -v "blob_is_oversize[${path_to_blob[$rel_path]}]" ]]; then
+			target_paths["$rel_path"]=1
+		fi
+	done < <(printf '%s\n' "${!path_is_selected_for_analysis[@]}")
+	add_list_with_size target_paths
+}
+
+add_invalid_utf8_details() {
+	declare -A target_paths
+	while IFS= read -r rel_path; do
+		if [[ -v "blob_has_invalid_utf8[${path_to_blob[$rel_path]}]" ]]; then
+			target_paths["$rel_path"]=1
+		fi
+	done < <(printf '%s\n' "${!path_is_selected_for_analysis[@]}")
+	add_list_with_size target_paths
+}
+
+add_details_for_safe_files() {
+	declare -A target_paths
+	while IFS= read -r rel_path; do
+		local blob_hash="${path_to_blob[$rel_path]}"
+		if [[ -v "blob_is_safe[$blob_hash]" ]] && ! [[ -v path_is_symlink["$rel_path"] || -v path_is_submodule["$rel_path"] || -v path_has_lfs["$rel_path"] || -v path_is_binary["$rel_path"] ]]; then
+			target_paths["$rel_path"]=1
+		fi
+	done < <(printf '%s\n' "${!path_is_selected_for_analysis[@]}")
+	add_list_with_size target_paths
+}
+
+add_null_byte_details() {
+	local -i max_size_len=0 max_additional_len=0 max_count=0
+	declare -A target_paths
+
+	while IFS= read -r rel_path; do
+		local blob_hash="${path_to_blob[$rel_path]}"
+		if [[ -v "blob_has_nulls[$blob_hash]" ]]; then
+			target_paths["$rel_path"]=1
+			local count=${blob_to_null_count[$blob_hash]:-0}
+			((count > max_count)) && max_count=$count
+		fi
+	done < <(printf '%s\n' "${!path_is_selected_for_analysis[@]}")
+
+	local count_width=${#max_count}
+	local len_size
+	local additional
+	local len_additional
+
+	while IFS= read -r rel_path; do
+		len_size=${#blob_to_size_pretty[${path_to_blob[$rel_path]}]}
+		((len_size > max_size_len)) && max_size_len=$len_size
+		local count=${blob_to_null_count[${path_to_blob[$rel_path]}]}
+		additional=$(printf "NULL ×%${count_width}d" "$count")
+		len_additional=${#additional}
+		((len_additional > max_additional_len)) && max_additional_len=$len_additional
+	done < <(printf '%s\n' "${!target_paths[@]}")
+
+	while IFS= read -r rel_path; do
+		local blob_hash="${path_to_blob[$rel_path]}"
+		local formatted_size count
+		local padded_size padded_additional
+		formatted_size="${blob_to_size_pretty[$blob_hash]}"
+		count="${blob_to_null_count[$blob_hash]}"
+		padded_size=$(printf "%-*s" "$max_size_len" "$formatted_size")
+		additional=$(printf "NULL ×%${count_width}d" "$count")
+		padded_additional=$(printf "%-*s" "$max_additional_len" "$additional")
+		buffer_append "    - [${padded_size}] [${padded_additional}] ${rel_path}"
+	done < <(printf '%s\n' "${!target_paths[@]}" | sort -V)
+}
+
+add_nonprint_details() {
+	local -i max_size_len=0 max_additional_len=0 max_count=0
+	declare -A target_paths
+
+	while IFS= read -r rel_path; do
+		local blob_hash="${path_to_blob[$rel_path]}"
+		if [[ -v "blob_has_nonprint[$blob_hash]" ]]; then
+			target_paths["$rel_path"]=1
+			local count=${blob_to_nonprint_count[$blob_hash]:-0}
+			((count > max_count)) && max_count=$count
+		fi
+	done < <(printf '%s\n' "${!path_is_selected_for_analysis[@]}")
+
+	local count_width=${#max_count}
+	local len_size
+	local additional
+	local len_additional
+
+	while IFS= read -r rel_path; do
+		len_size=${#blob_to_size_pretty[${path_to_blob[$rel_path]}]}
+		((len_size > max_size_len)) && max_size_len=$len_size
+		local count=${blob_to_nonprint_count[${path_to_blob[$rel_path]}]}
+		additional=$(printf "NONPRINT ×%${count_width}d" "$count")
+		len_additional=${#additional}
+		((len_additional > max_additional_len)) && max_additional_len=$len_additional
+	done < <(printf '%s\n' "${!target_paths[@]}")
+
+	while IFS= read -r rel_path; do
+		local blob_hash="${path_to_blob[$rel_path]}"
+		local formatted_size count
+		local padded_size padded_additional
+		formatted_size="${blob_to_size_pretty[$blob_hash]}"
+		count="${blob_to_nonprint_count[$blob_hash]}"
+		padded_size=$(printf "%-*s" "$max_size_len" "$formatted_size")
+		additional=$(printf "NONPRINT ×%${count_width}d" "$count")
+		padded_additional=$(printf "%-*s" "$max_additional_len" "$additional")
+		buffer_append "    - [${padded_size}] [${padded_additional}] ${rel_path}"
+	done < <(printf '%s\n' "${!target_paths[@]}" | sort -V)
 }
 
 ### V. Output Controller
@@ -1644,37 +1584,42 @@ build_additional() {
 
 output_intro() {
 	# Initial report metadata
-	add_header "GIT SUBTREE CONCATENATION REPORT"
+	add_header "GIT SUBTREE ANALYSIS REPORT"
 	buffer_append "$(apply_color " ▸ Repository Root:   " "${COLORS[detail]}")$repo_root"
 	buffer_append "$(apply_color " ▸ Target Subtree:    " "${COLORS[detail]}")${subdir_rel:-/}"
-	buffer_append "$(apply_color " ▸ Commit Hash:       " "${COLORS[detail]}")${ref_hash:0:8}"
+	local ref_display_string=""
+	if ((git_ref_arg_set)); then
+		ref_display_string="${ref_hash:0} (from user, ref: '${git_ref_arg}')"
+	else
+		ref_display_string="${ref_hash:0} (used default: HEAD)"
+	fi
+	buffer_append "$(apply_color " ▸ Tree Reference:       " "${COLORS[detail]}")${ref_display_string}"
+	buffer_append "$(apply_color " ▸ Inclusion Filter:  " "${COLORS[detail]}")'${include_pattern_arg:-<none>}'  (ERE)"
 	buffer_append "$(apply_color " ▸ Exclusion Filter:  " "${COLORS[detail]}")'${exclude_pattern_arg:-<none>}'  (ERE)"
-	buffer_append "$(apply_color " ▸ Max File Size:     " "${COLORS[detail]}")$(numfmt --to=iec "$max_file_size_arg")"
+	buffer_append "$(apply_color " ▸ Max File Size:     " "${COLORS[detail]}")$(format_size "${max_file_size_arg}")"
 	add_divider "${BOX_CHARS[line_single]}" 80 "detail"
 }
 
 output_concatenation_list() {
-	# Concatenation preview
-	((${#blob_is_safe[@]} == 0)) && return
-	local count_text
+	((report_data[file_counts_concatenatable] == 0)) && return
 	local -a sorted_paths=()
-	local -i total_blobs=${#blob_is_safe[@]}
-	count_text="$(apply_color "$total_blobs" "${COLORS[good]}") blobs found"
 
 	add_section "CONCATENATION CANDIDATES"
-	buffer_append "$(apply_color "  ✓ " "${COLORS[good]}")The following $count_text met all safety criteria:"
+	buffer_append "$(apply_color "  ✓ " "${COLORS[good]}")The following ${report_data[file_counts_concatenatable]} files met all safety criteria:"
 	add_divider "${BOX_CHARS[line_single]}" 80 "detail"
 
-	# Collect all paths associated with concatenatable blobs
-	declare -A concat_paths=()
-	for rel_path in "${!path_is_included[@]}"; do
-		blob_hash="${path_to_blob[$rel_path]}"
-		if [[ -v blob_is_safe["$blob_hash"] ]]; then
-			concat_paths["$rel_path"]=1
-		fi
-	done
-	mapfile -t sorted_paths < <(printf "%s\n" "${!concat_paths[@]}" | sort -V)
-	readonly -a sorted_paths
+	mapfile -t sorted_paths < <(
+		for rel_path in "${!path_is_selected_for_analysis[@]}"; do
+			local blob_hash="${path_to_blob[$rel_path]}"
+			if [[ -v blob_is_safe["$blob_hash"] ]] &&
+				! [[ -v path_is_symlink["$rel_path"] ||
+					-v path_is_submodule["$rel_path"] ||
+					-v path_has_lfs["$rel_path"] ||
+					-v path_is_binary["$rel_path"] ]]; then
+				echo "$rel_path"
+			fi
+		done | sort -V
+	)
 
 	for path in "${sorted_paths[@]}"; do
 		buffer_append "  ⎔ $(apply_color "$path" "${COLORS[neutral]}")"
@@ -1684,20 +1629,21 @@ output_concatenation_list() {
 }
 
 output_concat() {
-	# Safe file sequencer
-	((${#blob_is_safe[@]} == 0)) && exit 0
+	((report_data[file_counts_concatenatable] == 0)) && exit 0
 	local -a sorted_paths=()
 
-	# Collect all paths associated with concatenatable blobs
-	declare -A concat_paths=()
-	for rel_path in "${!path_is_included[@]}"; do
-		blob_hash="${path_to_blob[$rel_path]}"
-		if [[ -v blob_is_safe["$blob_hash"] ]]; then
-			concat_paths["$rel_path"]=1
-		fi
-	done
-	mapfile -t sorted_paths < <(printf "%s\n" "${!concat_paths[@]}" | sort -V)
-	readonly -a sorted_paths
+	mapfile -t sorted_paths < <(
+		for rel_path in "${!path_is_selected_for_analysis[@]}"; do
+			local blob_hash="${path_to_blob[$rel_path]}"
+			if [[ -v blob_is_safe["$blob_hash"] ]] &&
+				! [[ -v path_is_symlink["$rel_path"] ||
+					-v path_is_submodule["$rel_path"] ||
+					-v path_has_lfs["$rel_path"] ||
+					-v path_is_binary["$rel_path"] ]]; then
+				echo "$rel_path"
+			fi
+		done | sort -V
+	)
 
 	for rel_path in "${sorted_paths[@]}"; do
 		local blob_hash="${path_to_blob[$rel_path]}"
@@ -1717,13 +1663,12 @@ output_report() {
 	current_buffer="INTRODUCTION"
 	output_intro
 	render_tree
+
 	current_buffer="CONCLUSION"
 	collect_report_data
-	add_summary_section
+	add_filtering_report
 	add_file_analysis
 	add_size_analysis
-	add_exclusion_details
-	validate_report_data
 
 	if ((concatenate_flag)); then
 		current_buffer="INTRODUCTION"
@@ -1746,12 +1691,13 @@ main() {
 	parse_arguments "$@"
 	setup_environment
 	get_tree_hashes
-	collect_path_is_included
+	hydrate_file_inventory_and_filter
 	process_files
 	output_report
 
-	[[ ${#blob_is_safe[@]} -eq 0 ]] &&
-		echo "⚠️  Warning: No blobs passed safety checks" >&2
+	if ((report_data[file_counts_selected] > 0 && report_data[file_counts_concatenatable] == 0)); then
+		echo "⚠️  Warning: No selected files were eligible for concatenation." >&2
+	fi
 }
 
 ### Post-Execution Information
@@ -1759,7 +1705,7 @@ show_runtime_info() {
 	# Resource usage stats
 	echo >&2 # Add a newline for clean separation
 	add_divider "${BOX_CHARS[line_single]}" 80 "detail" >&2
-	echo "  Processed ${report_data[file_counts_included]} of ${report_data[file_counts_total_pre_exclusion]} files in ${SECONDS}s." >&2
+	echo "  Analyzed content of ${report_data[file_counts_selected]} files (from ${report_data[file_counts_initial_candidates]} total in subtree) in ${SECONDS}s." >&2
 }
 
 ### Final Execution Flow
